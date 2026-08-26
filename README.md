@@ -67,8 +67,9 @@ gabaithon_2026/
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
-   │  ├─ Media.ts            ← 写真・動画データの形式
-   │  └─ User.ts             ← ユーザー情報の形式
+   │  ├─ Media.ts            ← 写真データの形式
+   │  ├─ User.ts             ← ユーザー情報の形式
+   │  └─ Weather.ts          ← 気象データの形式
    │
    └─ constants/     ← A中心：アプリ全体で共通する設定
       └─ colors.ts   ← アプリで使う色
