@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,94 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
-
 import { COLORS } from "../constants/colors";
 
-export default function HomeScreen() {
-  const [liked, setLiked] = React.useState(false);
+// --- 型定義 ---
+export interface Media {
+  id: string;
+  url: string;
+  uploadedBy: string;
+  createdAt: string;
+  type: "image" | "AIimage";
+  tags: string[];
+  deliveryCount: number;
+  takenAt?: string;
+  caption?: string;
+}
+
+export interface News {
+  id: string;
+  deliveredTo: string;
+  type: "family" | "prevention";
+  title: string;
+  message: string;
+  mediaUrl: string;
+  isRead: boolean;
+  reaction?: string;
+  isAiGeneratedImage: boolean;
+  createdAt: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  role: "elderly" | "family";
+  familyGroupId: string;
+  location: string;
+  notificationEnabled: boolean;
+  photoUrl?: string;
+  createdAt?: string;
+}
+
+export interface Weather {
+  locationName: string;
+  date: string;
+  weatherText: string;
+  temperatureMax: number;
+  temperatureMin: number;
+  humidityDaytime: number;
+  humidityNight: number;
+  rainProbability: number;
+  uvIndex: number;
+  windSpeed: number;
+  warnings?: string[];
+}
+
+interface HomeScreenProps {
+  currentUser?: User;
+  weather?: Weather;
+  newsList?: News[];
+  onReaction?: (newsId: string, reaction: string) => void;
+  onConfirmPrevention?: (newsId: string) => void;
+}
+
+export default function HomeScreen({
+  currentUser,
+  weather,
+  newsList = [],
+  onReaction,
+  onConfirmPrevention,
+}: HomeScreenProps) {
+  // 各NEWSのリアクション・了解状態を管理
+  const [reactions, setReactions] = useState<{ [id: string]: string }>({});
+  const [confirmed, setConfirmed] = useState<{ [id: string]: boolean }>({});
+
+  const handleToggleLike = (newsId: string) => {
+    const currentReaction = reactions[newsId];
+    const newReaction = currentReaction === "❤️" ? "" : "❤️";
+    
+    setReactions((prev) => ({ ...prev, [newsId]: newReaction }));
+    if (onReaction) {
+      onReaction(newsId, newReaction);
+    }
+  };
+
+  const handleConfirm = (newsId: string) => {
+    setConfirmed((prev) => ({ ...prev, [newsId]: true }));
+    if (onConfirmPrevention) {
+      onConfirmPrevention(newsId);
+    }
+  };
 
   return (
     <ScrollView
@@ -21,77 +104,116 @@ export default function HomeScreen() {
       {/* ヘッダー */}
       <View style={styles.header}>
         <Text style={styles.logo}>MAGONEWS</Text>
-        <Text style={styles.date}>8月26日（水）</Text>
-      </View>
-
-      {/* 今日のNEWS */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          📸 今日のMAGONEWS
+        <Text style={styles.date}>
+          {weather?.date ? weather.date : "8月26日（水）"}
+          {currentUser?.name ? ` ・ ${currentUser.name}さん` : ""}
         </Text>
-
-        {/* 写真 */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            孫から写真が届きました
-          </Text>
-
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
-            }}
-            style={styles.image}
-          />
-
-          <Text style={styles.message}>
-            「みんなでかき氷を食べたよ！」
-          </Text>
-
-          {/* LINE風リアクション */}
-          <TouchableOpacity
-            style={[
-              styles.likeButton,
-              liked && styles.likeButtonActive,
-            ]}
-            onPress={() => setLiked(!liked)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.likeText}>
-              {liked ? "❤️ いいねぇ！" : "♡ いいねぇ"}
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
-      {/* 今日の予防情報 */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          ☀️ 今日のお知らせ
-        </Text>
-
-        <View style={styles.warningCard}>
-          <Text style={styles.warningTitle}>
-            今日は暑いですね
+      {/* 気象警報アラート（存在時のみ表示） */}
+      {weather?.warnings && weather.warnings.length > 0 && (
+        <View style={styles.alertBanner}>
+          <Text style={styles.alertText}>
+            ⚠️ {weather.warnings.join("・")} が発表されています
           </Text>
-
-          <Text style={styles.warningMessage}>
-            ○○ちゃんも冷たい飲み物を
-            飲んでいるみたいです。
-            {"\n\n"}
-            あなたも飲み物を
-            飲みませんか？
-          </Text>
-
-          <TouchableOpacity
-            style={styles.okButton}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.okText}>
-              分かった
-            </Text>
-          </TouchableOpacity>
         </View>
-      </View>
+      )}
+
+      {/* 天気サマリー */}
+      {weather && (
+        <View style={styles.weatherCard}>
+          <View style={styles.weatherMain}>
+            <Text style={styles.weatherLocation}>{weather.locationName}</Text>
+            <Text style={styles.weatherStatus}>{weather.weatherText}</Text>
+          </View>
+          <View style={styles.weatherDetails}>
+            <Text style={styles.tempText}>
+              <Text style={styles.tempMax}>{weather.temperatureMax}°C</Text> /{" "}
+              <Text style={styles.tempMin}>{weather.temperatureMin}°C</Text>
+            </Text>
+            <Text style={styles.rainText}>
+              降水確率 {weather.rainProbability}%
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* NEWS配信リスト */}
+      {newsList.map((news) => {
+        const isFamilyNews = news.type === "family";
+        const isLiked = (reactions[news.id] || news.reaction) === "❤️";
+        const isConfirmed = confirmed[news.id];
+
+        return (
+          <View key={news.id} style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {isFamilyNews ? "📸 今日のMAGONEWS" : "☀️ 今日のお知らせ"}
+            </Text>
+
+            <View style={isFamilyNews ? styles.card : styles.warningCard}>
+              <Text
+                style={
+                  isFamilyNews ? styles.cardTitle : styles.warningTitle
+                }
+              >
+                {news.title}
+              </Text>
+
+              {news.mediaUrl ? (
+                <View style={styles.imageWrapper}>
+                  <Image
+                    source={{ uri: news.mediaUrl }}
+                    style={styles.image}
+                  />
+                  {news.isAiGeneratedImage && (
+                    <View style={styles.aiBadge}>
+                      <Text style={styles.aiBadgeText}>AIイラスト</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              <Text
+                style={
+                  isFamilyNews ? styles.message : styles.warningMessage
+                }
+              >
+                {news.message}
+              </Text>
+
+              {/* カード種別ごとのアクションボタン */}
+              {isFamilyNews ? (
+                <TouchableOpacity
+                  style={[
+                    styles.likeButton,
+                    isLiked && styles.likeButtonActive,
+                  ]}
+                  onPress={() => handleToggleLike(news.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.likeText}>
+                    {isLiked ? "❤️ いいねぇ！" : "♡ いいねぇ"}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.okButton,
+                    isConfirmed && styles.okButtonActive,
+                  ]}
+                  onPress={() => handleConfirm(news.id)}
+                  activeOpacity={0.8}
+                  disabled={isConfirmed}
+                >
+                  <Text style={styles.okText}>
+                    {isConfirmed ? "✓ 分かりました" : "分かった"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -108,7 +230,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    marginBottom: 25,
+    marginBottom: 20,
   },
 
   logo: {
@@ -121,6 +243,71 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 20,
     color: COLORS.textSecondary,
+  },
+
+  alertBanner: {
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+
+  alertText: {
+    color: "#B91C1C",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  weatherCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    elevation: 2,
+  },
+
+  weatherMain: {
+    flexDirection: "column",
+  },
+
+  weatherLocation: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+
+  weatherStatus: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  weatherDetails: {
+    alignItems: "flex-end",
+  },
+
+  tempText: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+
+  tempMax: {
+    color: "#EF4444",
+  },
+
+  tempMin: {
+    color: "#3B82F6",
+  },
+
+  rainText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
 
   section: {
@@ -148,11 +335,33 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
-  image: {
+  imageWrapper: {
+    position: "relative",
     width: "100%",
     height: 260,
-    borderRadius: 14,
     marginBottom: 15,
+  },
+
+  image: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+  },
+
+  aiBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  aiBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   message: {
@@ -208,6 +417,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  okButtonActive: {
+    backgroundColor: "#9CA3AF",
   },
 
   okText: {
