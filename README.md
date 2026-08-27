@@ -53,6 +53,9 @@ gabaithon_2026/
 │
 ├─ assets/
 │
+├─ tests/             ← 各機能の動作確認テスト
+│  └─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
+│
 └─ src/
    │
    ├─ screens/       ← A担当：画面そのもの
@@ -64,6 +67,7 @@ gabaithon_2026/
    ├─ firebase/      ← B担当：Firebaseとの接続・データ保存（写真/ユーザー情報の保存取得、通知処理など）
    │
    ├─ services/      ← C担当：天気・AI・NEWS生成などの処理
+   │  └─ photoSelectService.ts      ← AI① 写真選択AI（毎日のNEWS用）
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
@@ -94,6 +98,17 @@ gabaithon_2026/
 
 ---
 
+## テストの実行方法
+
+各機能の動作確認テストは以下のコマンドで個別に実行できます：
+
+```bash
+# AI① 写真選択AI（photoSelectService）の動作テスト
+npm run test:photoSelect
+```
+
+---
+
 ## 開発ルール（Git）
 
 1. `main` ブランチで直接作業せず、必ず作業用ブランチを作成して作業してください。
@@ -101,3 +116,15 @@ gabaithon_2026/
    - 担当A: `feature/front-xxx`
    - 担当B: `feature/backend-xxx`
    - 担当C: `feature/ai-xxx`
+
+---
+
+## 開発状況・検討中事項（Notes）
+
+### AI① 写真選択AI（`selectPhotos`）
+- **現在の優先順位実装:**
+  1. 新しい写真（投稿日付が新しい順）
+  2. 未配信の写真（`deliveryCount === 0`）
+  3. 過去の重複回避（`deliveryCount` が少ない順）
+- **今後の検討事項:**
+  - 要件定義書にある「重要度」および「画面での見やすさ」の判定については現在未実装（どのようにデータを付与・判定するか今後検討）。
