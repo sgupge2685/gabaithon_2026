@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test:photoSelect": "npx tsx tests/testSelectPhotos.ts"
+    "test:photoSelect": "npx tsx tests/testSelectPhotos.ts",
+    "test:tagging": "npx tsx --env-file=.env tests/testTagging.ts"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",

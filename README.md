@@ -54,7 +54,8 @@ gabaithon_2026/
 ├─ assets/
 │
 ├─ tests/             ← 各機能の動作確認テスト
-│  └─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
+│  ├─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
+│  └─ testTagging.ts         ← 写真自動タグ付けAIのテスト
 │
 └─ src/
    │
@@ -67,7 +68,8 @@ gabaithon_2026/
    ├─ firebase/      ← B担当：Firebaseとの接続・データ保存（写真/ユーザー情報の保存取得、通知処理など）
    │
    ├─ services/      ← C担当：天気・AI・NEWS生成などの処理
-   │  └─ photoSelectService.ts      ← AI① 写真選択AI（毎日のNEWS用）
+   │  ├─ photoSelectService.ts      ← AI① 写真選択AI（毎日のNEWS用）
+   │  └─ taggingService.ts          ← 写真自動タグ付けAI
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
@@ -105,6 +107,9 @@ gabaithon_2026/
 ```bash
 # AI① 写真選択AI（photoSelectService）の動作テスト
 npm run test:photoSelect
+
+# 写真自動タグ付けAI（taggingService）の動作テスト
+npm run test:tagging
 ```
 
 ---
