@@ -10,6 +10,7 @@
     "test:photoSelect": "npx tsx tests/testSelectPhotos.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.19.0",
     "expo": "~54.0.36",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
