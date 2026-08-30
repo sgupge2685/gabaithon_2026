@@ -1,26 +1,35 @@
 // アプリ全体で使用する色
-
 export const COLORS = {
-  // メイン
-  primary: "#4A90E2",
-  primaryLight: "#EAF4FF",
+  // メインブランドカラー
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
 
-  // 背景
-  background: "#F7F8FA",
+  // 背景・カード
+  background: "#F3F4F6",
   card: "#FFFFFF",
 
-  // 文字
-  text: "#222222",
-  textSecondary: "#666666",
+  // テキスト
+  text: "#1F2937",
+  textSecondary: "#6B7280",
 
-  // リアクション
-  like: "#FF6B81",
+  // 気象警報アラート
+  alertBg: "#FEE2E2",
+  alertBorder: "#FCA5A5",
+  alertText: "#B91C1C",
 
-  // 警告
-  warning: "#FFF3CD",
-  warningText: "#7A5700",
+  // 予防・注意カード
+  warning: "#FEF3C7",
+  warningBorder: "#E8D28A",
+  warningText: "#92400E",
 
-  // その他
-  border: "#DDDDDD",
+  // リアクション（いいね）
+  like: "#EF4444",
+  likeLight: "#FFE7EC",
+
+  // 気温表示・状態
+  tempMax: "#EF4444",
+  tempMin: "#3B82F6",
+  disabled: "#9CA3AF",
+  disabledText: "#4B5563",
   white: "#FFFFFF",
 };
