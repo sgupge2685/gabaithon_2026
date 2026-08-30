@@ -1,6 +1,6 @@
+import * as fs from 'fs';
 import { GoogleGenAI, Type } from '@google/genai';
 
-// Gemini API の初期化（.env の GEMINI_API_KEY を自動読み込み）
 const ai = new GoogleGenAI({});
 
 /**
@@ -23,30 +23,99 @@ export const BASE_TAGS = [
 
 /**
  * 写真の自動タグ付けAI
- * JPEG, PNG, WebP 等の画像から、方針に沿った日本語タグ（3〜8個）を生成する
+ * ファイルパス・URL・Base64のいずれかを渡すだけで、自動で分析してタグを生成する
  * 
- * @param imageBase64 画像のBase64文字列データ
- * @param mimeType 画像の形式（省略時はBase64またはデフォルトから自動判定）
+ * @param imageInput 画像の「ファイルパス（tests/images/xxx.jpg）」または「URL（https://...）」または「Base64文字列」
  * @param modelName 使用するAIモデル（デフォルト: 'gemini-3.6-flash'）
  * @returns 生成されたタグの配列（例: ['家族', '食事', 'かき氷', '夏']）
  */
 export async function generatePhotoTags(
-  imageBase64: string,
-  mimeType: string = 'image/jpeg',
+  imageInput: string,
   modelName: string = 'gemini-3.6-flash'
 ): Promise<string[]> {
   try {
-    // PNG などのデータヘッダーが含まれている場合は自動判定
-    let detectedMimeType = mimeType;
-    if (imageBase64.startsWith('data:image/png') || imageBase64.startsWith('iVBORw0KGgo')) {
-      detectedMimeType = 'image/png';
-    } else if (imageBase64.startsWith('data:image/webp')) {
-      detectedMimeType = 'image/webp';
+    let base64Data = '';
+    let mimeType = 'image/jpeg';
+
+    // --------------------------------------------------
+    // ① 渡されたデータが「ネットのURL」の場合（https://...）
+    // --------------------------------------------------
+    if (imageInput.startsWith('http://') || imageInput.startsWith('https://')) {
+      const response = await fetch(imageInput);
+      const arrayBuffer = await response.arrayBuffer();
+      base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+      const rawContentType = response.headers.get('content-type');
+      const contentType = rawContentType ? rawContentType.toLowerCase().split(';')[0].trim() : '';
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
+
+      if (contentType && allowedTypes.includes(contentType)) {
+        mimeType = (contentType === 'image/jpg') ? 'image/jpeg' : contentType;
+      } else {
+        console.error(`✕ ネットのURLが対応画像形式ではありません: ${rawContentType || '不明'}（対応形式: jpg, jpeg, png, heic, heif, webp）`);
+        return [];
+      }
+
+    // --------------------------------------------------
+    // ② 渡されたデータが「パソコン内のファイルパス」の場合（tests/images/xxx.jpg）
+    // --------------------------------------------------
+    } else if (fs.existsSync(imageInput)) {
+      const buffer = fs.readFileSync(imageInput);
+      base64Data = buffer.toString('base64');
+
+      const lower = imageInput.toLowerCase();
+      if (lower.endsWith('.png')) {
+        mimeType = 'image/png';
+      } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+        mimeType = 'image/jpeg';
+      } else if (lower.endsWith('.heic') || lower.endsWith('.heif')) {
+        mimeType = 'image/heic'; // iPhone 写真対応
+      } else if (lower.endsWith('.webp')) {
+        mimeType = 'image/webp';
+      } else {
+        console.error(`✕ 未対応の画像形式です: ${imageInput}（対応形式: jpg, jpeg, png, heic, heif, webp）`);
+        return [];
+      }
+
+    // --------------------------------------------------
+    // ③ 渡されたデータが「すでにBase64の文字列」の場合
+    // --------------------------------------------------
+    } else {
+      // ヘッダー（data:image/xxx;base64,）付きの場合
+      const headerMatch = imageInput.match(/^data:(image\/\w+);base64,/i);
+      
+      if (headerMatch) {
+        const headerType = headerMatch[1].toLowerCase();
+        const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
+        if (allowed.includes(headerType)) {
+          mimeType = (headerType === 'image/jpg') ? 'image/jpeg' : headerType;
+        } else {
+          console.error(`✕ 未対応のBase64画像形式です: ${headerType}（対応形式: jpg, jpeg, png, heic, heif, webp）`);
+          return [];
+        }
+      } else {
+        // ヘッダーがない生Base64の場合、先頭のマジックバイトから判定
+        if (imageInput.startsWith('/9j/')) {
+          mimeType = 'image/jpeg';
+        } else if (imageInput.startsWith('iVBORw0KGgo')) {
+          mimeType = 'image/png';
+        } else if (imageInput.startsWith('UklGR')) {
+          mimeType = 'image/webp';
+        } else if (imageInput.startsWith('AAAA') || imageInput.includes('ftypheic') || imageInput.includes('ftypmif1')) {
+          mimeType = 'image/heic'; // iPhone 写真
+        } else {
+          console.error('✕ 不明なBase64データです（jpg, jpeg, png, heic, heif, webp のいずれでもありません）');
+          return [];
+        }
+      }
+
+      // 余計なヘッダーを除去して純粋なBase64にする
+      base64Data = imageInput.replace(/^data:image\/\w+;base64,/i, '');
     }
 
-    // "data:image/jpeg;base64," のようなプレフィックスがあれば純粋なBase64に除去
-    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-
+    // --------------------------------------------------
+    // ④ Gemini 3.6 に画像を投げてタグを生成！
+    // --------------------------------------------------
     const prompt = `
 あなたは高齢者向け予防型見守りアプリの写真分析AIです。
 写真から役立つタグを抽出してください。
@@ -73,8 +142,8 @@ export async function generatePhotoTags(
       contents: [
         {
           inlineData: {
-            data: cleanBase64,
-            mimeType: detectedMimeType,
+            data: base64Data,
+            mimeType: mimeType,
           },
         },
         prompt,

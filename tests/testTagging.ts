@@ -15,13 +15,14 @@ async function run() {
     return;
   }
 
+  // jpg, jpeg, png, heic, heif, webp の全形式を探す
   const files = fs.readdirSync(imagesDir).filter(file => 
-    /\.(jpg|jpeg|png|webp)$/i.test(file)
+    /\.(jpg|jpeg|png|heic|heif|webp)$/i.test(file)
   );
 
   if (files.length === 0) {
     console.error('❌ tests/images/ の中にテスト用画像が見つかりません');
-    console.log('👉 tests/images/ フォルダの中に .jpg や .png 形式の画像を保存してください！');
+    console.log('👉 tests/images/ フォルダの中に画像を保存してください！');
     return;
   }
 
@@ -30,15 +31,11 @@ async function run() {
     const filePath = path.join(imagesDir, file);
     console.log(`📸 テスト画像: ${file}`);
 
-    // 画像ファイルを読み込んで Base64（文字データ）に変換
-    const imageBuffer = fs.readFileSync(filePath);
-    const base64 = imageBuffer.toString('base64');
-
-    console.log('⏳ Gemini (3.6 Flash) に画像を送信中...');
+    console.log('⏳ Gemini (3.6 Flash) でタグ付け中...');
     const startTime = Date.now();
 
-    // ★自作のAI関数に画像を投げる！
-    const tags = await generatePhotoTags(base64);
+    // ★ファイルパス（filePath）をそのまま渡すだけ！
+    const tags = await generatePhotoTags(filePath);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
