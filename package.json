@@ -6,9 +6,13 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:photoSelect": "npx tsx tests/testSelectPhotos.ts",
+    "test:tagging": "npx tsx --env-file=.env tests/testTagging.ts",
+    "test:news": "npx tsx --env-file=.env tests/testNewsGenerate.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.19.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.36",
     "expo-image-picker": "~17.0.11",
