@@ -113,13 +113,14 @@ const selectedPhotos = selectPhotos(mediaList, 1);
 ```
 
 ### ③ AI② NEWS生成AI（高齢者向け紹介文の作成時に使用）
-写真データ（`Media`）を渡すと、家族コメントを最優先し、コメントがない場合はタグから温かい紹介文を自動生成して返します。
+写真データ（`Media`）を渡すと、魅力的な見出し「タイトル」と「本文」をセットで返します。
+家族コメントがある場合は本文を最優先し、コメントがない場合はタグから温かい紹介文を自動生成します。
 ```typescript
 import { generateNewsMessage } from './src/services/newsGenerateService';
 
-const message = await generateNewsMessage(selectedPhoto);
-// 家族コメントがある場合 ➔ そのままコメント本文
-// コメントがない場合     ➔ 「公園で元気に遊んでいる写真が届きました。（AIによる自動生成）」
+const newsContent = await generateNewsMessage(selectedPhoto);
+// newsContent.title   ➔ 「元気に公園あそび！」（AIが生成した見出し）
+// newsContent.message ➔ 「今日は公園に行ってきたよ！」（家族コメントまたはAI自動生成文）
 ```
 
 ---
