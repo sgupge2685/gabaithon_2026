@@ -141,7 +141,7 @@ export default function NewsScreen({ navigation }: any) {
         </Text>
 
         <Text style={styles.heading}>
-          今日の新聞
+          今日のニュース
         </Text>
 
         {loading ? (
@@ -152,7 +152,7 @@ export default function NewsScreen({ navigation }: any) {
             />
 
             <Text style={styles.loadingText}>
-              新聞を印刷中...
+              ニュースを読み込み中...
             </Text>
           </View>
         ) : news ? (
@@ -166,7 +166,7 @@ export default function NewsScreen({ navigation }: any) {
           </View>
         ) : (
           <Text style={styles.emptyText}>
-            まだ新聞が届いていません。
+            まだニュースが届いていません。
           </Text>
         )}
       </ScrollView>

@@ -239,7 +239,7 @@ export default function AddFamilyScreen() {
 
             <Text style={styles.helperText}>
               ご家族がスマホでこのコードを入力すると、{"\n"}
-              あなた宛てにNEWSが届くようになります。
+              あなた宛てにニュースが届くようになります。
             </Text>
           </View>
         )}

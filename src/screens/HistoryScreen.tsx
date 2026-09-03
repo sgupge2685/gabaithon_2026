@@ -122,7 +122,7 @@ export default function HistoryScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>
-          NEWS履歴
+          ニュース履歴
         </Text>
       </View>
 
@@ -134,7 +134,7 @@ export default function HistoryScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            まだNEWSがありません。
+            まだニュースがありません。
           </Text>
         }
       />
