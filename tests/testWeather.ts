@@ -18,7 +18,7 @@ async function runTest() {
     const weather: Weather | null = await getWeatherData(city);
 
     if (weather) {
-      console.log('✅ 取得成功！取得された気象データ（Weather 型）:');
+      console.log('[取得成功] 気象データ（Weather 型）:');
       console.log(`   ・地域名: ${weather.locationName}`);
       console.log(`   ・日付: ${weather.date}`);
       console.log(`   ・天気: ${weather.weatherText}`);
@@ -27,9 +27,10 @@ async function runTest() {
       console.log(`   ・降水確率: ${weather.rainProbability}%`);
       console.log(`   ・紫外線指数(UV): ${weather.uvIndex}`);
       console.log(`   ・風速: ${weather.windSpeed} m/s`);
-      console.log(`   ・発令中の気象庁公式警報: ${weather.warnings && weather.warnings.length > 0 ? weather.warnings.join(', ') : 'なし（平常）'}\n`);
+      console.log(`   ・発令中の気象庁公式警報: ${weather.warnings && weather.warnings.length > 0 ? weather.warnings.join(', ') : 'なし（平常）'}`);
+      console.log(`   ・含まれるキー一覧: [ ${Object.keys(weather).join(', ')} ]\n`);
     } else {
-      console.log('❌ 取得失敗（地名が見つからないため、安全に null が返されました）\n');
+      console.log('[失敗] 地名が見つからないため、安全に null が返されました\n');
     }
   }
 
