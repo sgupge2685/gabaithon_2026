@@ -51,52 +51,87 @@ npx expo start --go --offline --ios
 ```text
 gabaithon_2026/
 │
-├─ App.tsx
-├─ app.json
-├─ package.json
-├─ package-lock.json
-├─ tsconfig.json
+├─ App.tsx                     ← アプリのエントリーポイント（ナビゲーション呼び出し）
+├─ app.json                    ← Expo設定ファイル（アプリ名、アイコン、パーミッション設定等）
+├─ eas.json                    ← Expo Application Services (EAS) ビルド設定
+├─ firebase.json / .firebaserc ← Firebase CLI 設定
+├─ GoogleService-Info.plist    ← Firebase iOS用接続設定
+├─ google-services.json        ← Firebase Android用接続設定
+├─ package.json                ← 依存関係・テスト実行スクリプト定義
+├─ tsconfig.json               ← TypeScriptコンパイル設定
 │
-├─ assets/
+├─ assets/                     ← アプリのアイコン・スプラッシュ画像等
 │
-├─ tests/             ← 各機能の動作確認テスト
-│  ├─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
-│  ├─ testTagging.ts         ← 写真自動タグ付けAIのテスト
-│  ├─ testNewsGenerate.ts           ← AI② NEWS生成AIの単体テスト
-│  ├─ testWeather.ts                ← 気象データ取得（気象庁＋Open-Meteo）のテスト
-│  ├─ testPreventionNews.ts         ← AI③④ 予防NEWS生成・写真選定（一本化）のテスト
-│  └─ testImageGenerate.ts          ← AI⑤ イラスト生成AIのテスト（参考用）
+├─ tests/                      ← 各機能の動作確認用単体テスト（tsxで即実行可能）
+│  ├─ testSelectPhotos.ts      ← AI① 写真選択AIの単体テスト
+│  ├─ testTagging.ts           ← 写真自動タグ付けAIのテスト
+│  ├─ testNewsGenerate.ts      ← AI② NEWS生成AIの単体テスト
+│  ├─ testWeather.ts          ← 気象データ取得（気象庁公式＋Open-Meteo）のテスト
+│  ├─ testPreventionNews.ts   ← AI③④ 予防NEWS生成・写真選定（一本化）のテスト
+│  └─ testImageGenerate.ts    ← AI⑤ イラスト生成AIのテスト（参考用）
+│
+├─ functions/                  ← Firebase Cloud Functions（バックエンド自動処理）
+│  ├─ src/
+│  │  ├─ index.ts              ← Cloud Functions のエントリーポイント（定時配信バッチ等）
+│  │  └─ services/            ← サーバー側共通サービス
+│  │     ├─ taggingService.ts
+│  │     └─ newsGenerateService.ts
+│  └─ package.json
 │
 └─ src/
    │
-   ├─ screens/       ← A担当：画面そのもの
+   ├─ screens/                 ← アプリ画面（高齢者側・家族側・認証系）
+   │  ├─ HomeScreen.tsx        ← 【高齢者】メインホーム（日めくりカレンダー・予防ニュース受信通知）
+   │  ├─ NewsScreen.tsx        ← 【高齢者】今日の新聞画面（写真・見出し・記事本文・「みたよ」ボタン）
+   │  ├─ HistoryScreen.tsx     ← 【高齢者】過去の新聞アーカイブ一覧画面
+   │  ├─ FamilyHomeScreen.tsx  ← 【家族】メインホーム（高齢者の読了確認・予防ニュース手動配信デモ・招待リンク発行・送信履歴）
+   │  ├─ CreateNewsScreen.tsx  ← 【家族】写真投稿画面（写真選択・AI自動タグ付け・AI見出し生成・記事配信）
+   │  ├─ RoleSelectScreen.tsx  ← 【初期設定】役割選択画面（「おじいちゃん・おばあちゃん」or「ご家族」）
+   │  ├─ Loginscreen.tsx       ← 【認証】ログイン・新規登録画面（電話番号認証・SMSコード認証）
+   │  └─ AddFamilyScreen.tsx   ← 【家族連携】招待コード入力画面（高齢者・家族のペアリング接続）
    │
-   ├─ components/    ← A担当：複数画面で共通して使うUI部品
+   ├─ components/              ← 複数画面で再利用する共通UIコンポーネント
+   │  ├─ NewspaperCard.tsx     ← 新聞風カードコンポーネント（写真・見出し・本文・リアクションボタン）
+   │  └─ ReactionButton.tsx    ← 「みたよ」スタンプボタン（タップでリアクション送信＆アニメーション）
    │
-   ├─ navigation/    ← A担当：画面と画面を移動する仕組み
+   ├─ navigation/              ← ナビゲーション設定
+   │  └─ AppNavigator.tsx      ← React Navigation による全画面の画面遷移スタック定義
    │
-   ├─ firebase/      ← B担当：Firebaseとの接続・データ保存（写真/ユーザー情報の保存取得、通知処理など）
-   │  ├─ firebaseConfig.ts   ← Firebase初期化設定
-   │  ├─ firebaseAuth.ts     ← ユーザー認証（登録・ログイン・ログアウト）
-   │  ├─ firebaseStorage.ts  ← 写真アップロード（Cloud Storage）
-   │  └─ firestore.ts        ← データベース操作（Media/Newsの保存・取得・更新）
+   ├─ features/                ← 各ドメインごとの機能ロジック（認証・家族連携・通知）
+   │  ├─ auth/
+   │  │  ├─ authFunctions.ts       ← ログイン中ユーザー取得・認証状態管理
+   │  │  └─ phoneAuthFunctions.ts  ← 電話番号認証（SMSコード発行・検証）
+   │  ├─ familyConnection/
+   │  │  ├─ familyConnectionFunctions.ts ← 招待リンク発行・招待コード検証・高齢者と家族の接続処理
+   │  │  └─ types/FamilyConnection.ts   ← 家族接続データの型定義
+   │  └─ notification/
+   │     ├─ notificationFunctions.ts   ← プッシュ通知送信・トークン管理
+   │     └─ pushNotificationService.ts ← Expo Notifications の初期設定・通知受信リスナー
    │
-   ├─ services/      ← C担当：天気・AI・NEWS生成などの処理
-   │  ├─ photoSelectService.ts            ← AI① 写真選択AI（毎日のNEWS用）
-   │  ├─ taggingService.ts                ← 写真自動タグ付けAI（アップロード時）
-   │  ├─ newsGenerateService.ts           ← AI② NEWS生成AI（紹介文作成）
-   │  ├─ weatherService.ts                ← 気象データ取得（気象庁公式＋Open-Meteo）
-   │  ├─ preventionNewsService.ts         ← AI③④ 予防NEWS生成・写真選定AI（健康安全アドバイス）
-   │  └─ imageGenerateService.ts          ← AI⑤ イラスト生成AI（参考コード保持）
+   ├─ firebase/                ← Firebase接続・Firestoreデータ操作
+   │  ├─ firebaseConfig.ts     ← Firebase初期化設定
+   │  ├─ firebaseAuth.ts       ← ユーザー認証ラッパー
+   │  ├─ firebaseStorage.ts    ← Cloud Storage への写真アップロード処理
+   │  └─ firestore.ts          ← Firestore CRUD操作（users, media, news コレクションの保存・取得・更新）
    │
-   ├─ types/         ← 3人で共有：データの型を定義など
-   │  ├─ News.ts             ← NEWSデータの形式
-   │  ├─ Media.ts            ← 写真データの形式
-   │  ├─ User.ts             ← ユーザー情報の形式
-   │  └─ Weather.ts          ← 気象データの形式
+   ├─ services/                ← AI連携・気象データ・通知サービス
+   │  ├─ clientAiService.ts    ← 【最重要】React Nativeクライアント用 Gemini AI 連携（自動タグ付け・見出し生成・気象連動予防ニュース・重複防止ガード）
+   │  ├─ weatherService.ts     ← 日本全国の気象データ取得（気象庁公式データ＋Open-Meteoの湿度/UV/風速）
+   │  ├─ notificationService.ts← ローカルプッシュ通知制御（権限リクエスト・通知発火）
+   │  ├─ photoSelectService.ts ← 写真選定ロジック（最新順・未配信優先・重複回避ソート）
+   │  ├─ preventionNewsService.ts ← Node.js/サーバー用 予防NEWS生成・気象判定・写真選定
+   │  ├─ newsGenerateService.ts   ← Node.js/サーバー用 NEWS生成AI（見出し＋紹介文）
+   │  ├─ taggingService.ts        ← Node.js/サーバー用 写真自動タグ付けAI
+   │  └─ imageGenerateService.ts  ← イラスト生成AI（Nano Banana 2 / 参考用）
    │
-   └─ constants/     ← A中心：アプリ全体で共通する設定
-      └─ colors.ts   ← アプリで使う色
+   ├─ types/                   ← アプリ全体で共有する TypeScript 型定義
+   │  ├─ News.ts               ← NEWSデータの形式（deliveredTo, title, message, mediaUrl, reaction等）
+   │  ├─ Media.ts              ← 写真データの形式（url, uploadedBy, tags, deliveryCount, caption等）
+   │  ├─ User.ts               ← ユーザー情報の形式（role, familyUid, location等）
+   │  └─ Weather.ts            ← 気象データの形式（気温、湿度、降水確率、警報等）
+   │
+   └─ constants/               ← 定数定義
+      └─ colors.ts             ← アプリ全体のカラーパレット（Primary, Background, Text等）
 ```
 
 ---
