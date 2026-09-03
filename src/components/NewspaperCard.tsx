@@ -55,8 +55,8 @@ export default function NewspaperCard({
 
         <Text style={styles.category}>
           {isFamilyNews
-            ? "家族NEWS"
-            : "くらしの予防NEWS"}
+            ? "家族ニュース"
+            : "くらしの予防ニュース"}
         </Text>
 
         <Text style={styles.title}>

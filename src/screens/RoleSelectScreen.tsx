@@ -1,11 +1,15 @@
 import React from "react";
+
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
 } from "react-native";
+
+import {
+  SafeAreaView,
+} from "react-native-safe-area-context";
 
 import { COLORS } from "../constants/colors";
 
@@ -13,13 +17,19 @@ export default function RoleSelectScreen({
   navigation,
 }: any) {
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <SafeAreaView
+      style={styles.safeArea}
+    >
+      <View
+        style={styles.container}
+      >
         <Text style={styles.logo}>
           MAGONEWS
         </Text>
 
-        <Text style={styles.message}>
+        <Text
+          style={styles.message}
+        >
           どなたがご利用になりますか？
         </Text>
 
@@ -27,7 +37,11 @@ export default function RoleSelectScreen({
             役割選択ボタン
            ================================================== */}
 
-        <View style={styles.buttonContainer}>
+        <View
+          style={
+            styles.buttonContainer
+          }
+        >
 
           {/* ================================================
               高齢者
@@ -48,7 +62,11 @@ export default function RoleSelectScreen({
             }
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>
+            <Text
+              style={
+                styles.buttonText
+              }
+            >
               👵👴
               {"\n"}
               おじいちゃん
@@ -76,7 +94,11 @@ export default function RoleSelectScreen({
             }
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>
+            <Text
+              style={
+                styles.buttonText
+              }
+            >
               👨‍👩‍👧
               {"\n"}
               ご家族の方

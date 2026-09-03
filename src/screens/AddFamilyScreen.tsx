@@ -13,6 +13,8 @@ import {
   Alert,
 } from "react-native";
 
+import { SafeAreaView as SafeAreaViewContext } from "react-native-safe-area-context";
+
 import {
   getAuth,
 } from "@react-native-firebase/auth";
@@ -167,7 +169,7 @@ export default function AddFamilyScreen({
 
   if (!invitationToken) {
     return (
-      <SafeAreaView
+      <SafeAreaViewContext
         style={styles.container}
       >
         <View style={styles.content}>
@@ -212,7 +214,7 @@ export default function AddFamilyScreen({
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </SafeAreaViewContext>
     );
   }
 
@@ -221,7 +223,7 @@ export default function AddFamilyScreen({
   // --------------------------------------------------
 
   return (
-    <SafeAreaView
+    <SafeAreaViewContext
       style={styles.container}
     >
       <View style={styles.content}>
@@ -305,7 +307,7 @@ export default function AddFamilyScreen({
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </SafeAreaViewContext>
   );
 }
 

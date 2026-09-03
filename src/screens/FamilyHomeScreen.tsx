@@ -152,14 +152,16 @@ export default function FamilyHomeScreen() {
         "users" 
       ); 
 
-      let elderlySnapshot: any = null;
-
       const myUserWithFamilyUid =
         myUser as User & {
           familyUid?: string;
         };
 
-      if (myUserWithFamilyUid.familyUid) {
+      let elderlySnapshot: any = null;
+
+      if (
+        myUserWithFamilyUid.familyUid
+      ) {
         const elderlyQuery = query(
           usersRef,
           where(
@@ -228,13 +230,16 @@ export default function FamilyHomeScreen() {
           .data(),
       } as User;
 
-      setElderlyUser(elderlyData);
+      setElderlyUser(
+        elderlyData
+      );
 
       // --------------------------------------------------
       // NEWS取得
       // --------------------------------------------------
 
-      const newsList = await getNews();
+      const newsList =
+        await getNews();
 
       const familyNews = newsList 
         .filter( 
@@ -349,7 +354,7 @@ export default function FamilyHomeScreen() {
   return ( 
     <SafeAreaView style={styles.container}> 
       <Text style={styles.headerTitle}> 
-        送信履歴 
+        送信履歴
       </Text> 
  
       {elderlyUser && ( 
@@ -366,7 +371,8 @@ export default function FamilyHomeScreen() {
         <TouchableOpacity
           style={[
             styles.inviteButton,
-            inviting && styles.buttonDisabled,
+            inviting &&
+              styles.buttonDisabled,
           ]}
           onPress={
             handleCreateInvitation
@@ -380,13 +386,21 @@ export default function FamilyHomeScreen() {
               color={COLORS.white}
             />
           ) : (
-            <Text style={styles.inviteButtonText}>
+            <Text
+              style={
+                styles.inviteButtonText
+              }
+            >
               高齢者を招待する
             </Text>
           )}
         </TouchableOpacity>
 
-        <Text style={styles.inviteDescription}>
+        <Text
+          style={
+            styles.inviteDescription
+          }
+        >
           招待リンクを作成して、高齢者の方へ送ることができます。
         </Text>
       </View>
