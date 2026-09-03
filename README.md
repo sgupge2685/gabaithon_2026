@@ -64,8 +64,8 @@ gabaithon_2026/
 │  ├─ testTagging.ts         ← 写真自動タグ付けAIのテスト
 │  ├─ testNewsGenerate.ts           ← AI② NEWS生成AIの単体テスト
 │  ├─ testWeather.ts                ← 気象データ取得（気象庁＋Open-Meteo）のテスト
-│  ├─ testPreventionNews.ts         ← AI③ 予防NEWS生成AIの単体テスト
-│  └─ testPreventionPhotoSelect.ts  ← AI④ 予防NEWS写真選択AIの単体テスト
+│  ├─ testPreventionNews.ts         ← AI③④ 予防NEWS生成・写真選定（一本化）のテスト
+│  └─ testImageGenerate.ts          ← AI⑤ イラスト生成AIのテスト（参考用）
 │
 └─ src/
    │
@@ -86,8 +86,8 @@ gabaithon_2026/
    │  ├─ taggingService.ts                ← 写真自動タグ付けAI（アップロード時）
    │  ├─ newsGenerateService.ts           ← AI② NEWS生成AI（紹介文作成）
    │  ├─ weatherService.ts                ← 気象データ取得（気象庁公式＋Open-Meteo）
-   │  ├─ preventionNewsService.ts         ← AI③ 予防NEWS生成AI（健康・安全アドバイス）
-   │  └─ preventionPhotoSelectService.ts  ← AI④ 予防NEWS写真選択AI（挿絵写真選定）
+   │  ├─ preventionNewsService.ts         ← AI③④ 予防NEWS生成・写真選定AI（健康安全アドバイス）
+   │  └─ imageGenerateService.ts          ← AI⑤ イラスト生成AI（参考コード保持）
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
@@ -221,27 +221,22 @@ const weather = await getWeatherData('佐賀市');
 // weather.warnings        ➔ ['雷注意報', '乾燥注意報']（市区町村別の公式警報）
 ```
 
-### ⑤ AI③ 予防NEWS生成AI（高齢者向け予防アドバイスの作成時に使用）
-高齢者ユーザー（`User`）と過去のNEWSリスト（`News[]`）を渡すと、`user.location` から天気を自動取得し、今日まだ伝えていない新しい危険がある場合のみ「タイトル」と「本文」を返します（平穏時や、本日すでに配信済みの重複時は `null` を返します）。
+### ⑤ AI③④ 予防NEWS・写真選定AI（高齢者向け予防アドバイスの作成時に使用）
+高齢者ユーザー（`User`）、過去のNEWSリスト（`News[]`）、家族写真リスト（`Media[]`）を渡すと、`user.location` から天気を自動取得し、今日まだ伝えていない新しい危険がある場合のみ、**「タグとコメントから合う写真を選定」し、その写真に触れながら「タイトル」と「本文」を一撃で生成** して返します（平穏時や、本日すでに配信済みの重複時は `null` を返します）。
 ※天気データをDBに保存する必要はありません。
 
 ```typescript
 import { generatePreventionNews } from './src/services/preventionNewsService';
 
-// 高齢者ユーザーと過去NEWSを渡すだけ！（天気の取得〜重複防止まで全自動）
-const preventionNews = await generatePreventionNews(elderlyUser, pastNewsList);
-// ➔ { title: "熱中症に気をつけて！", message: "今日は35℃の猛暑日です...（AIによる自動生成）" }
-// ※不要時や本日配信済みの場合は null が返ります
-```
+// 高齢者ユーザー、過去NEWS、家族写真リストを渡して 1回 呼ぶだけ！（全自動）
+const result = await generatePreventionNews(elderlyUser, pastNewsList, familyPhotos);
 
-### ⑥ AI④ 予防NEWS写真選択AI（予防NEWSにピッタリな写真の選定時に使用）
-予防NEWS（見出し・本文）と家族の写真リスト（`Media[]`）を渡すと、Geminiが文脈や意味（麦茶、傘、冬など）を理解して最もピッタリな写真を1枚選んで返します（合致する写真がない場合は `photo: null` を返します）。
-```typescript
-import { selectPhotoForPreventionNews } from './src/services/preventionPhotoSelectService';
-
-const { photo, reason } = await selectPhotoForPreventionNews(preventionNews, mediaList);
-// photo がある場合 ➔ photo.url を NEWS の mediaUrl にセット！
-// photo が null の場合 ➔ 次の AI⑤ でイラストを自動生成する
+if (result) {
+  console.log(result.title);        // ➔ 「麦茶で熱中症予防！」（見出し）
+  console.log(result.message);      // ➔ 「家族が作ってくれた冷たい麦茶、おいしそうですね！...（AIによる自動生成）」
+  console.log(result.photo?.url);   // ➔ 麦茶の写真のURL（そのまま NEWS の mediaUrl にセット！）
+  console.log(result.selectedReason);// ➔ なぜその写真を選んだかの理由
+}
 ```
 
 ---
@@ -263,11 +258,8 @@ npm run test:news
 # 気象データ取得（weatherService）の動作テスト
 npm run test:weather
 
-# AI③ 予防NEWS生成AI（preventionNewsService）の動作テスト
+# AI③④ 予防NEWS生成・写真選定AI（preventionNewsService）の動作テスト
 npm run test:prevention
-
-# AI④ 予防NEWS写真選択AI（preventionPhotoSelectService）の動作テスト
-npm run test:photoMatch
 ```
 
 ---
@@ -289,8 +281,7 @@ npm run test:photoMatch
 - ✅ **写真自動タグ付けAI (`taggingService.ts`)**: 基本タグ優先＋具体物追加＋抽象タグ排除＋全画像形式対応
 - ✅ **AI② NEWS生成AI (`newsGenerateService.ts`)**: 家族コメント最優先＋タグからの自動生成＋注釈付与
 - ✅ **気象データ取得サービス (`weatherService.ts`)**: 気象庁公式（天気・気温・警報）＋Open-Meteo（湿度・UV・風速）連携
-- ✅ **AI③ 予防NEWS生成AI (`preventionNewsService.ts`)**: 気象状況の自動判断＋高齢者向け健康安全アドバイス生成
-- ✅ **AI④ 予防NEWS写真選択AI (`preventionPhotoSelectService.ts`)**: 予防NEWSの文脈にマッチする家族写真の選定（適合なし時はnull返却）
+- ✅ **AI③④ 予防NEWS生成・写真選定AI (`preventionNewsService.ts`)**: 気象状況の自動判断＋家族写真（タグ・コメント）の自動選定＋写真に触れた予防NEWS一撃生成（重複防止機能つき）
 
 ### 実装見送り・今後の課題（担当C）
 - ⚠️ **AI⑤ イラスト生成AI (`imageGenerateService.ts`) の実装見送り（参考コードとして保持）**:
