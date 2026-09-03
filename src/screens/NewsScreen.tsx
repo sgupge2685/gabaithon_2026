@@ -7,6 +7,7 @@ import {
   StatusBar,
   ActivityIndicator,
   View,
+  TouchableOpacity, // 追加: ボタン用の部品
 } from "react-native";
 
 import { getAuth } from "firebase/auth";
@@ -34,7 +35,8 @@ const getTime = (dateInput: any) => {
   return new Date(dateInput).getTime();
 };
 
-export default function NewsScreen() {
+// 変更: navigation を受け取るようにする
+export default function NewsScreen({ navigation }: any) {
   const [news, setNews] = useState<News | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -126,6 +128,14 @@ export default function NewsScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
       >
+        {/* 追加: 戻るボタン */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>← ホームに戻る</Text>
+        </TouchableOpacity>
+
         <Text style={styles.logo}>
           MAGONEWS
         </Text>
@@ -146,10 +156,14 @@ export default function NewsScreen() {
             </Text>
           </View>
         ) : news ? (
-          <NewspaperCard
-            news={news}
-            onReaction={handleReaction}
-          />
+          <View>
+            <Text style={styles.newsTitle}>{news.title}</Text>
+            
+            <NewspaperCard
+              news={news}
+              onReaction={handleReaction}
+            />
+          </View>
         ) : (
           <View style={styles.centerBox}>
             <Text style={styles.emptyText}>
@@ -179,6 +193,19 @@ const styles = StyleSheet.create({
     minHeight: "100%",
   },
 
+  // 追加: 戻るボタンのスタイル
+  backButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingRight: 16,
+    marginBottom: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+
   logo: {
     fontSize: 32,
     fontWeight: "800",
@@ -193,7 +220,17 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: "center",
     marginTop: 6,
+    marginBottom: 12,
+  },
+
+  newsTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: COLORS.text,
+    textAlign: "center",
     marginBottom: 20,
+    lineHeight: 30,
+    paddingHorizontal: 16,
   },
 
   centerBox: {

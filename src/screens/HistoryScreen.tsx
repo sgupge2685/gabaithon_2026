@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { COLORS } from '../constants/colors';
 import type { News } from '../types/News';
 import { getNews } from '../firebase/firestore';
@@ -21,7 +21,8 @@ const getTime = (dateInput: any) => {
   return new Date(dateInput).getTime();
 };
 
-export default function HistoryScreen() {
+// 変更: navigation を受け取るようにする
+export default function HistoryScreen({ navigation }: any) {
   const [history, setHistory] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +47,6 @@ export default function HistoryScreen() {
       <View style={styles.historyItemContainer}>
         <Text style={styles.dateHeader}>{formatDate(item.createdAt)}</Text>
         
-        
         <NewspaperCard
           news={item}
           // 過去の履歴からはリアクションできない（あるいは既に送信済み）なので空関数を渡す
@@ -67,7 +67,17 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.headerTitle}>NEWS履歴</Text>
+      {/* 追加: 戻るボタン（リストの上に配置） */}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>← ホームに戻る</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>NEWS履歴</Text>
+      </View>
+
       <FlatList
         data={history}
         keyExtractor={(item) => item.id}
@@ -102,13 +112,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textSecondary,
   },
+  
+  // 追加・変更: ヘッダー周りのスタイル
+  headerContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 1, // ボタンを一番手前に持ってくる
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text,
-    textAlign: 'center',
-    marginVertical: 16,
   },
+  
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 32,

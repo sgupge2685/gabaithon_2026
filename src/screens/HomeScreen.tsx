@@ -17,7 +17,14 @@ export default function HomeScreen({ navigation }: any) {
   const [hasNewNews, setHasNewNews] = useState(false);
   const [loading, setLoading] = useState(true);
 
-// 画面が表示されるたびに新着ニュースがあるかチェックする
+  // 日付情報の取得（日めくりカレンダー表示用）
+  const today = new Date();
+  const month = today.getMonth() + 1;
+  const date = today.getDate();
+  const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dayOfWeek = dayNames[today.getDay()];
+
+  // 画面が表示されるたびに新着ニュースがあるかチェックする
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       checkNewNews();
@@ -30,7 +37,7 @@ export default function HomeScreen({ navigation }: any) {
     try {
       setLoading(true);
       const newsList = await getNews();
-      
+
       // 未読(isReadがfalse)のニュースが1つでもあるかチェック
       const unreadExists = newsList.some((news: News) => news.isRead === false);
       setHasNewNews(unreadExists);
@@ -65,37 +72,69 @@ export default function HomeScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* 1. 今日のニュースを見る */}
+        {/* 1. 今日のニュース（日めくりカレンダー型ボタン） */}
         <TouchableOpacity
-          style={[styles.button, styles.newsButton]}
+          style={styles.calendarCard}
           onPress={() => navigation.navigate("News")}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="今日の新聞を見る"
+          accessibilityLabel="今日のニュースを見る"
         >
-          <Text style={styles.newsButtonText}>📰 今日のニュースを見る</Text>
+          {/* カレンダー上部のリング・バインダー風ヘッダー */}
+          <View style={styles.calendarHeaderToday}>
+            <View style={styles.calendarRingLeft} />
+            <View style={styles.calendarRingRight} />
+            <Text style={styles.calendarHeaderTextToday}>TODAY'S NEWS</Text>
+          </View>
+
+          {/* カレンダー本文 */}
+          <View style={styles.calendarBody}>
+            <View style={styles.dateBlock}>
+              <Text style={styles.monthText}>{month}月</Text>
+              <Text style={styles.dateNumberText}>{date}</Text>
+              <Text style={styles.dayText}>({dayOfWeek})</Text>
+            </View>
+
+            <View style={styles.cardContent}>
+              <View style={styles.titleRow}>
+                <Text style={styles.mainActionText}>今日のニュース</Text>
+                {hasNewNews && <View style={styles.unreadBadge} />}
+              </View>
+              <Text style={styles.subActionText}>
+                {hasNewNews ? "✨ 新しい新聞が届いています" : "最新の新聞を読む"}
+              </Text>
+            </View>
+          </View>
         </TouchableOpacity>
 
-        {/* 2. 過去のNEWSを見る (HistoryScreenへ) */}
+        {/* 2. 過去のNEWS（アーカイブカレンダー型ボタン） */}
         <TouchableOpacity
-          style={[styles.button, styles.historyButton]}
+          style={[styles.calendarCard, styles.historyCard]}
           onPress={() => navigation.navigate("History")}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           accessibilityRole="button"
+          accessibilityLabel="過去のニュースを見る"
         >
-          <Text style={styles.historyButtonText}>📚 過去のNEWSを見る</Text>
-        </TouchableOpacity>
+          {/* カレンダー上部のヘッダー */}
+          <View style={styles.calendarHeaderHistory}>
+            <View style={styles.calendarRingLeft} />
+            <View style={styles.calendarRingRight} />
+            <Text style={styles.calendarHeaderTextHistory}>ARCHIVE</Text>
+          </View>
 
-        {/* 3. 家族を追加する (AddFamilyScreenへ) */}
-        <TouchableOpacity
-          style={[styles.button, styles.addFamilyButton]}
-          onPress={() => navigation.navigate("AddFamily")}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-        >
-          <Text style={styles.addFamilyButtonText}>👨‍👩‍👧‍👦 家族を追加する</Text>
-        </TouchableOpacity>
+          {/* カレンダー本文 */}
+          <View style={styles.calendarBody}>
+            <View style={styles.historyIconBlock}>
+              <Text style={styles.historyCalendarIcon}>📅</Text>
+              <Text style={styles.historySubBadge}>一覧</Text>
+            </View>
 
+            <View style={styles.cardContent}>
+              <Text style={styles.historyActionText}>過去のNEWS</Text>
+              <Text style={styles.subActionText}>これまでの思い出を振り返る</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -111,83 +150,203 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
 
   logo: {
-    fontSize: 40,
+    fontSize: 38,
     fontWeight: "800",
     color: COLORS.primary,
     letterSpacing: 2,
-    marginBottom: 24,
+    marginBottom: 8,
   },
 
   greeting: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   messageContainer: {
-    minHeight: 60,
+    minHeight: 56,
     justifyContent: "center",
-    marginBottom: 40,
+    marginBottom: 28,
   },
 
   message: {
-    fontSize: 20,
+    fontSize: 18,
     color: COLORS.textSecondary,
     textAlign: "center",
-    lineHeight: 30,
+    lineHeight: 26,
   },
 
-  // ボタン共通スタイル
-  button: {
+  // カレンダーカード共通
+  calendarCard: {
     width: "100%",
-    minHeight: 70, // 元の80から少しだけスリムにして3つ並べやすく
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16, // ボタン同士の間隔
-  },
-
-  // 今日のニュースボタン
-  newsButton: {
-    backgroundColor: COLORS.primary,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  newsButtonText: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.white,
-  },
-
-  // 履歴ボタン
-  historyButton: {
     backgroundColor: COLORS.card,
+    borderRadius: 20,
+    marginBottom: 20,
     borderWidth: 2,
     borderColor: COLORS.primary,
-  },
-  historyButtonText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.primary,
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
   },
 
-  // 家族追加ボタン
-  addFamilyButton: {
-    backgroundColor: COLORS.card,
+  historyCard: {
+    borderColor: COLORS.disabled,
+    elevation: 1,
+    shadowOpacity: 0.05,
+  },
+
+  // ヘッダー部（バインダー風デザイン）
+  calendarHeaderToday: {
+    height: 32,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  calendarHeaderHistory: {
+    height: 32,
+    backgroundColor: COLORS.disabled,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+  calendarHeaderTextToday: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+  },
+  calendarHeaderTextHistory: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+  },
+
+  // カレンダー上部のリング穴装飾
+  calendarRingLeft: {
+    position: "absolute",
+    left: 40,
+    top: -4,
+    width: 8,
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: COLORS.background,
+  },
+  calendarRingRight: {
+    position: "absolute",
+    right: 40,
+    top: -4,
+    width: 8,
+    height: 12,
+    borderRadius: 4,
+    backgroundColor: COLORS.background,
+  },
+
+  // カレンダー内部コンテンツ
+  calendarBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+
+  // 「今日」の日付ブロック
+  dateBlock: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: COLORS.disabled,
+    marginRight: 16,
   },
-  addFamilyButtonText: {
-    fontSize: 18,
-    fontWeight: "600",
+  monthText: {
+    fontSize: 12,
+    fontWeight: "700",
     color: COLORS.textSecondary,
+    lineHeight: 14,
+  },
+  dateNumberText: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.primary,
+    lineHeight: 30,
+  },
+  dayText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+    lineHeight: 13,
+  },
+
+  // 「過去」のアイコンブロック
+  historyIconBlock: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.disabled,
+    marginRight: 16,
+  },
+  historyCalendarIcon: {
+    fontSize: 26,
+    marginBottom: 2,
+  },
+  historySubBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+
+  // カード右側のテキスト領域
+  cardContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  mainActionText: {
+    fontSize: 21,
+    fontWeight: "800",
+    color: COLORS.text,
+    letterSpacing: 0.5,
+  },
+  historyActionText: {
+    fontSize: 21,
+    fontWeight: "800",
+    color: COLORS.text,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  subActionText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
+  },
+
+  // 未読バッジ（赤丸）
+  unreadBadge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FF3B30",
+    marginLeft: 8,
   },
 });

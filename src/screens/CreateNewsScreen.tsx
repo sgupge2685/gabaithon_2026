@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 
 import * as ImagePicker from "expo-image-picker";
@@ -55,7 +57,6 @@ export default function CreateNewsScreen({ navigation }: any) {
   // --------------------------------------------------
   // 家族ユーザーとペアの高齢者を取得
   // --------------------------------------------------
-
   useEffect(() => {
     const loadUsers = async () => {
       try {
@@ -82,21 +83,22 @@ export default function CreateNewsScreen({ navigation }: any) {
         setCurrentUser(myUser);
 
         if (myUser.role !== "family") {
-          Alert.alert("エラー", "この画面は家族側のみ利用できます。");
+          Alert.alert("エラー", "この画面は家族側のみ利用できます。", [
+            { text: "OK", onPress: () => navigation.goBack() },
+          ]);
           return;
         }
 
         if (!myUser.familyGroupId) {
           Alert.alert(
             "家族未接続",
-            "先に高齢者の方と接続してください。"
+            "先に高齢者の方と接続してください。",
+            [{ text: "OK", onPress: () => navigation.goBack() }]
           );
           return;
         }
 
-        // 同じfamilyGroupIdを持つ高齢者を取得
         const usersRef = collection(db, "users");
-
         const elderlyQuery = query(
           usersRef,
           where("familyGroupId", "==", myUser.familyGroupId),
@@ -109,7 +111,8 @@ export default function CreateNewsScreen({ navigation }: any) {
         if (elderlySnapshot.empty) {
           Alert.alert(
             "高齢者が見つかりません",
-            "先に高齢者の方と家族接続をしてください。"
+            "接続先の高齢者が見つかりません。接続コードを再度確認してください。",
+            [{ text: "OK", onPress: () => navigation.goBack() }]
           );
           return;
         }
@@ -122,22 +125,18 @@ export default function CreateNewsScreen({ navigation }: any) {
         setElderlyUser(elderlyData);
       } catch (error) {
         console.error("ユーザー取得エラー:", error);
-        Alert.alert(
-          "エラー",
-          "ユーザー情報を取得できませんでした。"
-        );
+        Alert.alert("エラー", "ユーザー情報を取得できませんでした。");
       } finally {
         setLoading(false);
       }
     };
 
     loadUsers();
-  }, []);
+  }, [navigation]);
 
   // --------------------------------------------------
   // 写真を選択
   // --------------------------------------------------
-
   const pickImage = async () => {
     try {
       const permission =
@@ -146,7 +145,7 @@ export default function CreateNewsScreen({ navigation }: any) {
       if (!permission.granted) {
         Alert.alert(
           "写真へのアクセスが必要です",
-          "設定から写真へのアクセスを許可してください。"
+          "端末の設定から写真へのアクセスを許可してください。"
         );
         return;
       }
@@ -157,7 +156,7 @@ export default function CreateNewsScreen({ navigation }: any) {
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets.length > 0) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         setImageUri(result.assets[0].uri);
       }
     } catch (error) {
@@ -169,14 +168,17 @@ export default function CreateNewsScreen({ navigation }: any) {
   // --------------------------------------------------
   // 画像をStorageへアップロード
   // --------------------------------------------------
-
   const uploadImage = async (): Promise<string> => {
-    if (!imageUri) {
-      return "";
-    }
+    if (!imageUri) return "";
 
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
+    const blob: Blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => resolve(xhr.response);
+      xhr.onerror = () => reject(new TypeError("画像の読み込みに失敗しました"));
+      xhr.responseType = "blob";
+      xhr.open("GET", imageUri, true);
+      xhr.send(null);
+    });
 
     const fileName = `news/${Date.now()}-${Math.random()
       .toString(36)
@@ -186,13 +188,15 @@ export default function CreateNewsScreen({ navigation }: any) {
 
     await uploadBytes(imageRef, blob);
 
+    // @ts-ignore
+    blob.close?.();
+
     return await getDownloadURL(imageRef);
   };
 
   // --------------------------------------------------
   // NEWS送信
   // --------------------------------------------------
-
   const handleSend = async () => {
     if (!currentUser) {
       Alert.alert("エラー", "ユーザー情報がありません。");
@@ -200,59 +204,51 @@ export default function CreateNewsScreen({ navigation }: any) {
     }
 
     if (!elderlyUser) {
-      Alert.alert(
-        "送信できません",
-        "送信先の高齢者が見つかりません。"
-      );
+      Alert.alert("送信できません", "送信先の高齢者が見つかりません。");
       return;
     }
 
     if (!imageUri) {
-      Alert.alert("写真を選択してください");
-      return;
-    }
-
-    if (!caption.trim()) {
-      Alert.alert(
-        "コメントを入力してください",
-        "ここをタップし写真に一言メッセージを添えてください。",
-      );
+      Alert.alert("写真を選択してください", "NEWSに載せる写真を選んでください。");
       return;
     }
 
     try {
       setSending(true);
 
-      // ① Storageへ写真アップロード
       const mediaUrl = await uploadImage();
 
-      // ② Media保存
+      const finalMessage = caption.trim()
+        ? caption.trim()
+        : "家族から元気な写真が届きました！今日も良い一日になりますように。";
+
+      const now = new Date().toISOString();
+
       await saveMedia({
         url: mediaUrl,
         uploadedBy: currentUser.id,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
         type: "image",
-        tags: [],
+        tags: ["family"],
         deliveryCount: 1,
-        takenAt: new Date().toISOString(),
+        takenAt: now,
         caption: caption.trim(),
       });
 
-      // ③ NEWS保存
       await saveNews({
         deliveredTo: elderlyUser.id,
         type: "family",
         title: "今日の家族NEWS",
-        message: caption.trim(),
-        mediaUrl,
+        message: finalMessage,
+        mediaUrl: mediaUrl,
         isRead: false,
         isAiGeneratedImage: false,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       });
 
       Alert.alert(
-        "送信しました",
-        `${elderlyUser.name}さんにNEWSを届けました。`,
+        "送信しました！",
+        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんにNEWSを届けました。`,
         [
           {
             text: "OK",
@@ -265,113 +261,95 @@ export default function CreateNewsScreen({ navigation }: any) {
       setCaption("");
     } catch (error) {
       console.error("NEWS送信エラー:", error);
-
-      Alert.alert(
-        "送信に失敗しました",
-        "もう一度お試しください。"
-      );
+      Alert.alert("送信に失敗しました", "通信環境を確認してもう一度お試しください。");
     } finally {
       setSending(false);
     }
   };
 
-  // --------------------------------------------------
-  // Loading
-  // --------------------------------------------------
-
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator
-          size="large"
-          color={COLORS.primary}
-        />
-        <Text style={styles.loadingText}>
-          準備中...
-        </Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>準備中...</Text>
       </SafeAreaView>
     );
   }
 
-  // --------------------------------------------------
-  // 画面
-  // --------------------------------------------------
-
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
       >
-        <Text style={styles.title}>
-          家族NEWSを送る
-        </Text>
-
-        {elderlyUser && (
-          <Text style={styles.destinationText}>
-            送信先：{elderlyUser.name}
-          </Text>
-        )}
-
-        <TouchableOpacity
-          style={styles.imagePicker}
-          onPress={pickImage}
-          disabled={sending}
-          activeOpacity={0.8}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
         >
-          {imageUri ? (
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.previewImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <>
-              <Text style={styles.cameraIcon}>📷</Text>
-              <Text style={styles.imagePickerText}>
-                写真を選ぶ
+          {/* ヘッダー部（戻るボタン ＆ 送信先表示） */}
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              disabled={sending}
+            >
+              <Text style={styles.backButtonText}>← 戻る</Text>
+            </TouchableOpacity>
+
+            {elderlyUser && (
+              <Text style={styles.destinationText}>
+                宛先：{elderlyUser.name || "おじいちゃん・おばあちゃん"}
               </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            )}
+          </View>
 
-        <Text style={styles.label}>
-          家族からのひとこと
-        </Text>
+          {/* 写真選択ボタン & プレビュー */}
+          <TouchableOpacity
+            style={styles.imagePicker}
+            onPress={pickImage}
+            disabled={sending}
+            activeOpacity={0.8}
+          >
+            {imageUri ? (
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.previewImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.imagePickerText}>NEWSに載せる写真を選ぶ</Text>
+            )}
+          </TouchableOpacity>
 
-        <TextInput
-          style={styles.textInput}
-          placeholder="コメントを入力（💡何も書かなければAIが考えます!）"
-          placeholderTextColor={COLORS.textSecondary}
-          value={caption}
-          onChangeText={setCaption}
-          multiline
-          textAlignVertical="top"
-          maxLength={200}
-          editable={!sending}
-        />
+          {/* コメント入力 */}
+          <TextInput
+            style={styles.textInput}
+            placeholder="コメントを入力（💡何も書かなければAIが考えます!）"
+            placeholderTextColor={COLORS.textSecondary}
+            value={caption}
+            onChangeText={setCaption}
+            multiline
+            textAlignVertical="top"
+            maxLength={200}
+            editable={!sending}
+          />
 
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            sending && styles.disabledButton,
-          ]}
-          onPress={handleSend}
-          disabled={sending}
-          activeOpacity={0.8}
-        >
-          {sending ? (
-            <ActivityIndicator
-              size="small"
-              color={COLORS.white}
-            />
-          ) : (
-            <Text style={styles.sendButtonText}>
-              📰 NEWSを送る
-            </Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+          {/* 送信ボタン */}
+          <TouchableOpacity
+            style={[styles.sendButton, sending && styles.disabledButton]}
+            onPress={handleSend}
+            disabled={sending}
+            activeOpacity={0.8}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Text style={styles.sendButtonText}>NEWSを送る</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -381,103 +359,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-
   loadingContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
     justifyContent: "center",
     alignItems: "center",
   },
-
   loadingText: {
     marginTop: 16,
     fontSize: 18,
     color: COLORS.textSecondary,
   },
-
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
-
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: COLORS.text,
-    textAlign: "center",
-    marginBottom: 8,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-
-  destinationText: {
+  backButton: {
+    paddingVertical: 6,
+    paddingRight: 12,
+  },
+  backButtonText: {
     fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    marginBottom: 24,
+    fontWeight: "bold",
+    color: COLORS.primary,
   },
-
+  destinationText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
   imagePicker: {
     width: "100%",
-    height: 280,
-    borderRadius: 20,
+    height: 200,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: COLORS.disabled,
     backgroundColor: COLORS.card,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginBottom: 24,
+    marginBottom: 12,
   },
-
   previewImage: {
     width: "100%",
     height: "100%",
   },
-
-  cameraIcon: {
-    fontSize: 50,
-    marginBottom: 12,
-  },
-
   imagePickerText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "bold",
     color: COLORS.primary,
   },
-
-  label: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.text,
-    marginBottom: 10,
-  },
-
   textInput: {
-    minHeight: 140,
+    minHeight: 100,
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.disabled,
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 18,
-    lineHeight: 28,
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 16,
+    lineHeight: 22,
     color: COLORS.text,
-    marginBottom: 24,
+    marginBottom: 16,
   },
-
   sendButton: {
-    height: 64,
-    borderRadius: 16,
+    height: 54,
+    borderRadius: 14,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-
   disabledButton: {
     opacity: 0.6,
   },
-
   sendButtonText: {
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: "bold",
     color: COLORS.white,
   },
