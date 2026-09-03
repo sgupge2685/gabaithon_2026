@@ -252,7 +252,7 @@ export default function FamilyHomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.headerTitle}>
-        送信履歴とみまもり
+        送信履歴
       </Text>
 
       {elderlyUser && (

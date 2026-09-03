@@ -215,7 +215,7 @@ export default function CreateNewsScreen({ navigation }: any) {
     if (!caption.trim()) {
       Alert.alert(
         "コメントを入力してください",
-        "写真に一言メッセージを添えてください。"
+        "ここをタップし写真に一言メッセージを添えてください。",
       );
       return;
     }
@@ -341,7 +341,7 @@ export default function CreateNewsScreen({ navigation }: any) {
 
         <TextInput
           style={styles.textInput}
-          placeholder="今日はこんなことがありました！"
+          placeholder="コメントを入力（💡何も書かなければAIが考えます!）"
           placeholderTextColor={COLORS.textSecondary}
           value={caption}
           onChangeText={setCaption}

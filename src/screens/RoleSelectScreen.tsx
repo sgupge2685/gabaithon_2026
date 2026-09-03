@@ -14,7 +14,7 @@ export default function RoleSelectScreen({ navigation }: any) {
           onPress={() => navigation.navigate("Home")}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>👵👴おじいちゃんおばあちゃんの方はこちら</Text>
+          <Text style={styles.buttonText}>👵👴おじいちゃん・おばあちゃんの方</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -22,7 +22,7 @@ export default function RoleSelectScreen({ navigation }: any) {
           onPress={() => navigation.navigate("FamilyHome")}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>👨‍👩‍👧ご家族の方はこちら</Text>
+          <Text style={styles.buttonText}>👨‍👩‍👧ご家族の方</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
