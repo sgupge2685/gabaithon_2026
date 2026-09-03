@@ -59,7 +59,8 @@ gabaithon_2026/
 ├─ tests/             ← 各機能の動作確認テスト
 │  ├─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
 │  ├─ testTagging.ts         ← 写真自動タグ付けAIのテスト
-│  └─ testNewsGenerate.ts    ← AI② NEWS生成AIの単体テスト
+│  ├─ testNewsGenerate.ts    ← AI② NEWS生成AIの単体テスト
+│  └─ testWeather.ts         ← 気象データ取得（気象庁＋Open-Meteo）のテスト
 │
 └─ src/
    │
@@ -70,11 +71,16 @@ gabaithon_2026/
    ├─ navigation/    ← A担当：画面と画面を移動する仕組み
    │
    ├─ firebase/      ← B担当：Firebaseとの接続・データ保存（写真/ユーザー情報の保存取得、通知処理など）
+   │  ├─ firebaseConfig.ts   ← Firebase初期化設定
+   │  ├─ firebaseAuth.ts     ← ユーザー認証（登録・ログイン・ログアウト）
+   │  ├─ firebaseStorage.ts  ← 写真アップロード（Cloud Storage）
+   │  └─ firestore.ts        ← データベース操作（Media/Newsの保存・取得・更新）
    │
    ├─ services/      ← C担当：天気・AI・NEWS生成などの処理
    │  ├─ photoSelectService.ts      ← AI① 写真選択AI（毎日のNEWS用）
    │  ├─ taggingService.ts          ← 写真自動タグ付けAI（アップロード時）
-   │  └─ newsGenerateService.ts     ← AI② NEWS生成AI（紹介文作成）
+   │  ├─ newsGenerateService.ts     ← AI② NEWS生成AI（紹介文作成）
+   │  └─ weatherService.ts          ← 気象データ取得（気象庁公式＋Open-Meteo）
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
@@ -84,6 +90,78 @@ gabaithon_2026/
    │
    └─ constants/     ← A中心：アプリ全体で共通する設定
       └─ colors.ts   ← アプリで使う色
+```
+
+---
+
+## 📊 データ構造の定義（`src/types/`）
+
+チーム全体（フロント・バック・AI）で共通して使用する主要なデータの保存形式です。
+
+### 1. 写真データ (`Media.ts`)
+家族がアップロードした写真のメタデータです。Firestoreの `media` コレクションに保存されます。
+```typescript
+export interface Media {
+  id: string;                // 写真の固有ID
+  url: string;               // 写真のアクセスURL（Cloud Storage）
+  uploadedBy: string;        // 投稿者のユーザーID
+  createdAt: string;         // 投稿日時
+  type: 'image' | 'AIimage'; // 通常写真 or AI生成画像
+  tags: string[];            // AIが付与したタグ（例: ['家族', '食事', '公園']）
+  deliveryCount: number;     // 過去にNEWSとして配信された回数（重複配信回避用）
+  takenAt?: string;          // 撮影日時（省略可）
+  caption?: string;          // 家族からのひとことコメント（省略可）
+}
+```
+
+### 2. NEWSデータ (`News.ts`)
+高齢者向けに毎日配信されるNEWSデータです。Firestoreの `news` コレクションに保存されます。
+```typescript
+export interface News {
+  id: string;                    // NEWSの固有ID
+  deliveredTo: string;           // 配信先の高齢者ユーザーID
+  type: 'family' | 'prevention'; // NEWS種別（家族写真NEWS or 予防情報NEWS）
+  title: string;                 // 見出しタイトル（例: 「元気に公園あそび！」「水分補給のお願い」）
+  message: string;               // 本文メッセージ（家族コメント or AI自動生成文）
+  mediaUrl: string;              // 表示する写真またはAIイラストのURL
+  isRead: boolean;               // 高齢者が読んだかどうかの既読フラグ（見守り用）
+  isAiGeneratedImage: boolean;   // 画像がAI生成イラスト（AI⑤）かどうか
+  createdAt: string;             // 配信日時
+  reaction?: string;             // 高齢者からのリアクション（例: "👍" / 省略可）
+}
+```
+
+### 3. ユーザー情報 (`User.ts`)
+高齢者および家族のアカウント情報です。
+```typescript
+export interface User {
+  id: string;                  // ユーザー固有ID（Firebase Auth UID）
+  name: string;                // 表示名（例: 「おじいちゃん」「たろう」）
+  role: 'elderly' | 'family';  // 高齢者側 or 家族側
+  familyGroupId: string;       // 所属する家族グループID
+  location: string;            // お住まいの地域名（例: "佐賀市" / 天気取得用）
+  notificationEnabled: boolean;// プッシュ通知設定
+  photoUrl?: string;           // プロフィールアイコン画像URL（省略可）
+  createdAt?: string;          // 作成日時（省略可）
+}
+```
+
+### 4. 気象データ (`Weather.ts`)
+`weatherService.ts` が気象庁および Open-Meteo から取得した気象データです。AI③（予防NEWS生成）の入力として使用されます。
+```typescript
+export interface Weather {
+  locationName: string;    // 正式地名（例: "佐賀市", "世田谷区"）
+  date: string;            // 日付（例: "2026-08-31"）
+  weatherText: string;     // 天気テキスト（例: "晴れ 時々 くもり"）
+  temperatureMax: number;  // 日中の最高気温（℃）
+  temperatureMin: number;  // 今夜〜明朝の最低気温（℃）
+  humidityDaytime: number; // 昼間の湿度（%）
+  humidityNight: number;   // 夜間の湿度（%）
+  rainProbability: number; // 降水確率（%）
+  uvIndex: number;         // 紫外線指数（UV）
+  windSpeed: number;       // 最大風速（m/s）
+  warnings?: string[];     // 発令中の公式警報・注意報（例: ['雷注意報', '乾燥注意報'] / なければ省略）
+}
 ```
 
 ---
@@ -123,6 +201,19 @@ const newsContent = await generateNewsMessage(selectedPhoto);
 // newsContent.message ➔ 「今日は公園に行ってきたよ！」（家族コメントまたはAI自動生成文）
 ```
 
+### ④ 気象データ取得サービス（天気・警報・湿度などの取得に使用）
+日本全国の市区町村名（「佐賀市」「世田谷区」など）を渡すと、気象庁の公式予報・警報と Open-Meteo の湿度・UV・風速を統合した `Weather` データを返します。
+```typescript
+import { getWeatherData } from './src/services/weatherService';
+
+const weather = await getWeatherData('佐賀市');
+// weather.weatherText     ➔ 「晴れ 時々 くもり」
+// weather.temperatureMax  ➔ 37（今日の最高気温）
+// weather.temperatureMin  ➔ 27（今夜〜明朝の最低気温）
+// weather.humidityDaytime ➔ 66（昼の湿度%）
+// weather.warnings        ➔ ['雷注意報', '乾燥注意報']（市区町村別の公式警報）
+```
+
 ---
 
 ## テストの実行方法
@@ -138,6 +229,9 @@ npm run test:tagging
 
 # AI② NEWS生成AI（newsGenerateService）の動作テスト
 npm run test:news
+
+# 気象データ取得（weatherService）の動作テスト
+npm run test:weather
 ```
 
 ---
@@ -158,6 +252,24 @@ npm run test:news
 - ✅ **AI① 写真選択AI (`photoSelectService.ts`)**: 新しい順・未配信・重複回避ソート実装済み
 - ✅ **写真自動タグ付けAI (`taggingService.ts`)**: 基本タグ優先＋具体物追加＋抽象タグ排除＋全画像形式対応
 - ✅ **AI② NEWS生成AI (`newsGenerateService.ts`)**: 家族コメント最優先＋タグからの自動生成＋注釈付与
+- ✅ **気象データ取得サービス (`weatherService.ts`)**: 気象庁公式（天気・気温・警報）＋Open-Meteo（湿度・UV・風速）連携
 
 ### 今後の検討事項
 - 写真選択時の「重要度（お気に入り）」および「画面での見やすさ」の判定については現在未実装（どのようにデータを付与・判定するか今後検討）。
+
+---
+
+## ⚠️ 気象データ取得に関する技術的留意事項（本番提供時の課題）
+
+現在本アプリで実装している `weatherService.ts` の気象データ取得方式については、以下の技術的背景と将来的な課題を認識して設計されています。
+
+### 1. 現状の取得アーキテクチャ（ハイブリッド方式）
+- **気象庁（JMA）内部データ:** 最高/最低気温、降水確率、および市区町村別の公式警報・注意報を取得。
+- **Open-Meteo API:** 「昼夜の湿度」「紫外線指数」「風速」を取得。
+
+### 2. 技術的留意事項・リスク
+現在参照している気象庁のエンドポイント（`jma.go.jp/bosai/...`）は、外部開発者向けに仕様保証された「公式API」ではなく、**「気象庁ホームページの画面表示用に内部利用されているJSONデータ」** を参照しています。
+そのため、将来的に気象庁側のWebサイト構造リニューアル、URL変更、またはアクセス制限・権限変更が行われた場合、**予告なくデータ取得が利用不可になるリスク** があります。
+
+### 3. 一般提供（商用サービス化）に向けた今後の課題
+プロトタイプ・ハッカソン段階では「完全無料かつ市区町村ピンポイントの公式警報」を実現するために現状のハイブリッド方式を採用していますが、将来的に一般向け商用サービスとして安定して提供するとなれば、他の手段を検討する必要がある。
