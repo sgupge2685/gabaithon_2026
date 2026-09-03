@@ -1,337 +1,574 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-import { getAuth, signInAnonymously } from "firebase/auth";
 import {
-  getFirestore,
-  doc,
-  setDoc,
-  collection,
-  query,
-  where,
-  limit,
-  getDocs,
-  serverTimestamp,
-} from "firebase/firestore";
+  sendVerificationCode,
+  verifyVerificationCode,
+} from "../features/auth/phoneAuthFunctions";
 
-import app from "../firebase/firebaseConfig";
+import {
+  saveUserProfile,
+} from "../features/auth/authFunctions";
+
 import { COLORS } from "../constants/colors";
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+type UserRole = "family" | "elderly";
 
-// 電話番号のハイフン・空白を除去して正規化
-const normalizePhoneNumber = (phone: string) => {
-  return phone.replace(/[-\s]/g, "");
-};
+interface LoginScreenProps {
+  navigation: any;
+  route: {
+    params?: {
+      role?: UserRole;
+    };
+  };
+}
 
-export default function FamilyPhoneLoginScreen({ navigation }: any) {
-  const [familyPhone, setFamilyPhone] = useState("");
-  const [elderlyPhone, setElderlyPhone] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  
-  // ステップ管理: "input" (番号入力) -> "verify" (確認コード入力)
-  const [step, setStep] = useState<"input" | "verify">("input");
-  const [targetElderly, setTargetElderly] = useState<{ id: string; familyGroupId: string } | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function LoginScreen({
+  navigation,
+  route,
+}: LoginScreenProps) {
+  // ============================================================
+  // 選択された役割
+  // ============================================================
 
-  // --------------------------------------------------
-  // ステップ1: 高齢者の電話番号存在確認 & SMS送信（デモ）
-  // --------------------------------------------------
-  const handleRequestVerification = async () => {
-    Keyboard.dismiss();
+  const role: UserRole =
+    route?.params?.role ?? "family";
 
-    const cleanFamilyPhone = normalizePhoneNumber(familyPhone);
-    const cleanElderlyPhone = normalizePhoneNumber(elderlyPhone);
+  // ============================================================
+  // State
+  // ============================================================
 
-    if (!cleanFamilyPhone || !cleanElderlyPhone) {
-      Alert.alert("入力エラー", "家族と高齢者の両方の電話番号を入力してください。");
-      return;
+  const [phoneNumber, setPhoneNumber] =
+    useState("");
+
+  const [verificationCode, setVerificationCode] =
+    useState("");
+
+  const [confirmation, setConfirmation] =
+    useState<any>(null);
+
+  const [step, setStep] = useState<
+    "phone" | "verification"
+  >("phone");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  // ============================================================
+  // 電話番号を日本の国際形式へ変換
+  // ============================================================
+
+  const normalizePhoneNumber = (
+    phone: string
+  ): string => {
+    const cleaned =
+      phone.replace(/[-\s]/g, "");
+
+    // 09012345678
+    // ↓
+    // +819012345678
+
+    if (cleaned.startsWith("0")) {
+      return `+81${cleaned.substring(1)}`;
     }
 
-    if (cleanFamilyPhone === cleanElderlyPhone) {
-      Alert.alert("入力エラー", "ご家族と高齢者で異なる電話番号を入力してください。");
-      return;
+    // すでに +81 などの場合
+    if (cleaned.startsWith("+")) {
+      return cleaned;
     }
 
-    try {
-      setLoading(true);
-
-      // 高齢者の登録状況を電話番号で検索
-      const usersRef = collection(db, "users");
-      const elderlyQuery = query(
-        usersRef,
-        where("phoneNumber", "==", cleanElderlyPhone),
-        where("role", "==", "elderly"),
-        limit(1)
-      );
-
-      const querySnapshot = await getDocs(elderlyQuery);
-
-      if (querySnapshot.empty) {
-        Alert.alert(
-          "高齢者が見つかりません",
-          "指定された電話番号で登録された高齢者アカウントが見つかりません。先に高齢者側の初期登録を完了してください。"
-        );
-        return;
-      }
-
-      const elderlyDoc = querySnapshot.docs[0];
-      const elderlyData = elderlyDoc.data();
-
-      if (!elderlyData.familyGroupId) {
-        Alert.alert(
-          "未設定エラー",
-          "高齢者側に家族グループIDがまだ発行されていません。高齢者端末で一度アプリを起動してください。"
-        );
-        return;
-      }
-
-      setTargetElderly({
-        id: elderlyDoc.id,
-        familyGroupId: elderlyData.familyGroupId,
-      });
-
-      // デモ用確認コードの案内
-      Alert.alert("確認コード送信", "デモ用確認コード【123456】を入力してください。");
-      setStep("verify");
-    } catch (error) {
-      console.error("検索エラー:", error);
-      Alert.alert("エラー", "通信に失敗しました。もう一度お試しください。");
-    } finally {
-      setLoading(false);
-    }
+    return cleaned;
   };
 
-  // --------------------------------------------------
-  // ステップ2: コード検証 & 家族アカウントへのID紐付け
-  // --------------------------------------------------
-  const handleVerifyAndLogin = async () => {
-    Keyboard.dismiss();
+  // ============================================================
+  // SMS認証コード送信
+  // ============================================================
 
-    if (verificationCode.trim() !== "123456") {
-      Alert.alert("認証エラー", "確認コードが正しくありません。（デモ用コード: 123456）");
-      return;
-    }
+  const handleSendVerificationCode =
+    async () => {
+      Keyboard.dismiss();
 
-    if (!targetElderly) {
-      Alert.alert("エラー", "連携先の高齢者情報が失われました。最初からやり直してください。");
-      setStep("input");
-      return;
-    }
+      const normalizedPhone =
+        normalizePhoneNumber(
+          phoneNumber
+        );
 
-    try {
-      setLoading(true);
+      if (!normalizedPhone) {
+        Alert.alert(
+          "入力エラー",
+          "電話番号を入力してください。"
+        );
 
-      // デモ認証（Firebase 匿名認証で一時UIDを確保）
-      const userCredential = await signInAnonymously(auth);
-      const uid = userCredential.user.uid;
-      const cleanFamilyPhone = normalizePhoneNumber(familyPhone);
+        return;
+      }
 
-      // 家族ドキュメントに高齢者の familyGroupId を紐付けて保存
-      const myUserRef = doc(db, "users", uid);
-      await setDoc(
-        myUserRef,
-        {
-          phoneNumber: cleanFamilyPhone,
-          role: "family",
-          familyGroupId: targetElderly.familyGroupId,
-          connectedElderlyId: targetElderly.id,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      try {
+        setLoading(true);
 
-      Alert.alert(
-        "ログイン完了",
-        `高齢者と家族グループ（ID: ${targetElderly.familyGroupId}）として接続しました！`,
-        [
-          {
-            text: "次へ",
-            onPress: () => {
-              if (navigation) {
-                navigation.navigate("FamilyHome");
+        const result =
+          await sendVerificationCode(
+            normalizedPhone
+          );
+
+        // SMS認証情報を保存
+        setConfirmation(result);
+
+        // 認証コード入力画面へ
+        setStep("verification");
+
+        Alert.alert(
+          "確認コードを送信しました",
+          "SMSで届いた6桁の確認コードを入力してください。"
+        );
+      } catch (error) {
+        console.error(
+          "SMS送信エラー:",
+          error
+        );
+
+        Alert.alert(
+          "SMS送信失敗",
+          error instanceof Error
+            ? error.message
+            : "確認コードの送信に失敗しました。"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  // ============================================================
+  // 認証コード確認
+  // ============================================================
+
+  const handleVerifyCode =
+    async () => {
+      Keyboard.dismiss();
+
+      if (!confirmation) {
+        Alert.alert(
+          "エラー",
+          "認証情報がありません。もう一度電話番号を入力してください。"
+        );
+
+        setStep("phone");
+
+        return;
+      }
+
+      if (
+        verificationCode.trim().length !==
+        6
+      ) {
+        Alert.alert(
+          "入力エラー",
+          "6桁の確認コードを入力してください。"
+        );
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        // ======================================================
+        // Firebase Authentication
+        // ======================================================
+
+        const user =
+          await verifyVerificationCode(
+            confirmation,
+            verificationCode.trim()
+          );
+
+        console.log(
+          "電話番号認証成功"
+        );
+
+        console.log(
+          "Firebase UID:",
+          user.uid
+        );
+
+        console.log(
+          "電話番号:",
+          user.phoneNumber
+        );
+
+        // ======================================================
+        // Firestore users/{uid} にユーザー情報保存
+        // ======================================================
+
+        await saveUserProfile(
+          role
+        );
+
+        console.log(
+          "ユーザープロフィール保存成功"
+        );
+
+        // ======================================================
+        // 役割に応じて画面遷移
+        // ======================================================
+
+        if (role === "family") {
+          navigation.replace(
+            "FamilyHome"
+          );
+        } else {
+          navigation.replace(
+            "Home"
+          );
+        }
+      } catch (error) {
+        console.error(
+          "電話番号認証エラー:",
+          error
+        );
+
+        Alert.alert(
+          "認証失敗",
+          error instanceof Error
+            ? error.message
+            : "確認コードが正しくないか、認証に失敗しました。"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  // ============================================================
+  // 電話番号入力画面
+  // ============================================================
+
+  if (step === "phone") {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : "height"
+        }
+      >
+        <ScrollView
+          contentContainerStyle={
+            styles.scrollContent
+          }
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>
+            MAGONEWS
+          </Text>
+
+          <Text style={styles.subtitle}>
+            {role === "family"
+              ? "家族ログイン"
+              : "高齢者ログイン"}
+          </Text>
+
+          <Text style={styles.description}>
+            電話番号を入力してログインしてください。
+          </Text>
+
+          <Text style={styles.label}>
+            電話番号
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="例: 09012345678"
+            placeholderTextColor={
+              COLORS.textSecondary
+            }
+            value={phoneNumber}
+            onChangeText={
+              setPhoneNumber
+            }
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            editable={!loading}
+          />
+
+          <Text style={styles.note}>
+            SMSで6桁の確認コードを送信します。
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              loading &&
+                styles.buttonDisabled,
+            ]}
+            onPress={
+              handleSendVerificationCode
+            }
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator
+                color={
+                  COLORS.white
+                }
+              />
+            ) : (
+              <Text
+                style={
+                  styles.buttonText
+                }
+              >
+                SMSを送信する
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={
+              styles.backButton
+            }
+            onPress={() =>
+              navigation.goBack()
+            }
+            disabled={loading}
+          >
+            <Text
+              style={
+                styles.backButtonText
               }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error("ログイン連携エラー:", error);
-      Alert.alert("エラー", "ログインおよび接続処理に失敗しました。");
-    } finally {
-      setLoading(false);
-    }
-  };
+            >
+              戻る
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ============================================================
+  // 認証コード入力画面
+  // ============================================================
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={
+        Platform.OS === "ios"
+          ? "padding"
+          : "height"
+      }
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>家族ログイン</Text>
-        <Text style={styles.subtitle}>電話番号でログインして高齢者とつながります</Text>
+      <ScrollView
+        contentContainerStyle={
+          styles.scrollContent
+        }
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>
+          MAGONEWS
+        </Text>
 
-        {step === "input" ? (
-          <View style={styles.formSection}>
-            <Text style={styles.label}>あなたの電話番号（家族）</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="例: 09012345678"
-              placeholderTextColor={COLORS.textSecondary}
-              value={familyPhone}
-              onChangeText={setFamilyPhone}
-              keyboardType="phone-pad"
-              autoComplete="tel"
+        <Text style={styles.subtitle}>
+          SMS認証
+        </Text>
+
+        <Text style={styles.description}>
+          {phoneNumber}
+          {"\n"}
+          に届いた6桁の確認コードを入力してください。
+        </Text>
+
+        <TextInput
+          style={[
+            styles.input,
+            styles.codeInput,
+          ]}
+          placeholder="123456"
+          placeholderTextColor={
+            COLORS.textSecondary
+          }
+          value={verificationCode}
+          onChangeText={
+            setVerificationCode
+          }
+          keyboardType="number-pad"
+          maxLength={6}
+          editable={!loading}
+        />
+
+        <TouchableOpacity
+          style={[
+            styles.button,
+            loading &&
+              styles.buttonDisabled,
+          ]}
+          onPress={
+            handleVerifyCode
+          }
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          {loading ? (
+            <ActivityIndicator
+              color={
+                COLORS.white
+              }
             />
-
-            <Text style={styles.label}>おじいちゃん・おばあちゃんの電話番号</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="例: 08098765432"
-              placeholderTextColor={COLORS.textSecondary}
-              value={elderlyPhone}
-              onChangeText={setElderlyPhone}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-            />
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleRequestVerification}
-              disabled={loading}
-              activeOpacity={0.8}
+          ) : (
+            <Text
+              style={
+                styles.buttonText
+              }
             >
-              {loading ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <Text style={styles.buttonText}>確認コードを受け取る</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.formSection}>
-            <Text style={styles.label}>確認コード（デモコード: 123456）</Text>
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              placeholder="123456"
-              placeholderTextColor={COLORS.textSecondary}
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-              keyboardType="number-pad"
-              maxLength={6}
-            />
+              認証してログイン
+            </Text>
+          )}
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleVerifyAndLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <Text style={styles.buttonText}>ログインして接続する</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => setStep("input")}
-              disabled={loading}
-            >
-              <Text style={styles.backButtonText}>電話番号の入力に戻る</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <TouchableOpacity
+          style={
+            styles.backButton
+          }
+          onPress={() => {
+            setStep("phone");
+            setConfirmation(
+              null
+            );
+            setVerificationCode(
+              ""
+            );
+          }}
+          disabled={loading}
+        >
+          <Text
+            style={
+              styles.backButtonText
+            }
+          >
+            電話番号の入力に戻る
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// ============================================================
+// Style
+// ============================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
+
   scrollContent: {
+    flexGrow: 1,
     padding: 24,
-    paddingTop: 48,
+    paddingTop: 80,
     justifyContent: "center",
   },
+
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "bold",
     color: COLORS.text,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
+
   subtitle: {
-    fontSize: 15,
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.text,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+
+  description: {
+    fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: "center",
+    lineHeight: 24,
     marginBottom: 36,
   },
-  formSection: {
-    width: "100%",
-  },
+
   label: {
     fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
     marginBottom: 8,
   },
+
   input: {
-    backgroundColor: COLORS.card,
+    backgroundColor:
+      COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.disabled,
+    borderColor:
+      COLORS.disabled,
     borderRadius: 12,
-    height: 56,
+    height: 58,
     paddingHorizontal: 16,
     fontSize: 18,
     color: COLORS.text,
-    marginBottom: 20,
+    marginBottom: 12,
   },
+
   codeInput: {
     textAlign: "center",
     letterSpacing: 8,
-    fontSize: 24,
+    fontSize: 26,
   },
+
+  note: {
+    fontSize: 13,
+    color:
+      COLORS.textSecondary,
+    marginBottom: 20,
+  },
+
   button: {
-    backgroundColor: COLORS.primary,
+    backgroundColor:
+      COLORS.primary,
     borderRadius: 12,
-    height: 56,
+    height: 58,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 8,
   },
+
   buttonDisabled: {
     opacity: 0.6,
   },
+
   buttonText: {
     color: COLORS.white,
     fontSize: 18,
     fontWeight: "bold",
   },
+
   backButton: {
-    marginTop: 16,
+    marginTop: 20,
     alignItems: "center",
   },
+
   backButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: 15,
+    color:
+      COLORS.textSecondary,
+    fontSize: 16,
   },
 });

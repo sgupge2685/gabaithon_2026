@@ -1,13 +1,14 @@
 import {
+  getFirestore,
   doc,
   getDoc,
   setDoc,
-  Timestamp,
-} from "firebase/firestore";
+  serverTimestamp,
+} from "@react-native-firebase/firestore";
+
+import { getAuth } from "@react-native-firebase/auth";
 
 import * as Linking from "expo-linking";
-
-import db from "../../firebase/firestore";
 
 import type {
   FamilyInvitation,
@@ -15,13 +16,16 @@ import type {
 } from "./types/FamilyConnection";
 
 // ============================================================
+// Firebase
+// ============================================================
+
+const auth = getAuth();
+const db = getFirestore();
+
+// ============================================================
 // 設定
 // ============================================================
 
-/**
- * 招待リンクの有効時間
- * 現在は24時間
- */
 const INVITATION_EXPIRE_HOURS = 24;
 
 // ============================================================
@@ -29,111 +33,121 @@ const INVITATION_EXPIRE_HOURS = 24;
 // ============================================================
 
 /**
- * ランダムな招待Tokenを生成する
- *
- * 例:
- * abc123xyz-8f3k2m1a
+ * 招待用のランダムTokenを生成する
  */
 const generateInvitationToken = (): string => {
   const randomPart = Math.random()
     .toString(36)
     .substring(2, 12);
 
-  const timestampPart = Date.now().toString(36);
+  const timestampPart =
+    Date.now().toString(36);
 
   return `${timestampPart}-${randomPart}`;
 };
 
 // ============================================================
-// 家族招待リンク作成
+// 現在のユーザーUID取得
+// ============================================================
+
+/**
+ * 現在ログインしている家族ユーザーのUIDを取得する
+ */
+const getCurrentFamilyUid = (): string => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error(
+      "ログインしているユーザーが見つかりません。"
+    );
+  }
+
+  return user.uid;
+};
+
+// ============================================================
+// 招待リンク作成
 // ============================================================
 
 /**
  * 家族側：
  * 高齢者を招待するための招待リンクを作成する
  *
- * @param familyUid 招待する家族側ユーザーのUID
- * @returns 招待リンク
+ * 招待情報の保存先:
+ * familyInvitations/{token}
+ *
+ * @returns 招待URL
  */
-export const createFamilyInvitation = async (
-  familyUid: string
-): Promise<string> => {
-  if (!familyUid) {
-    throw new Error(
-      "家族側ユーザーのUIDが取得できません。"
-    );
-  }
+export const createFamilyInvitation =
+  async (): Promise<string> => {
+    try {
+      const familyUid =
+        getCurrentFamilyUid();
 
-  try {
-    // 招待Tokenを生成
-    const token = generateInvitationToken();
+      const token =
+        generateInvitationToken();
 
-    // 現在時刻
-    const now = new Date();
+      const now = new Date();
 
-    // 24時間後を有効期限にする
-    const expiresAt = new Date(
-      now.getTime() +
-        INVITATION_EXPIRE_HOURS * 60 * 60 * 1000
-    );
-
-    // Firestoreに保存するデータ
-    const invitationData = {
-      familyUid,
-      token,
-      createdAt: Timestamp.fromDate(now),
-      expiresAt: Timestamp.fromDate(expiresAt),
-      used: false,
-    };
-
-    // ========================================================
-    // TokenをFirestoreのDocument IDとして使用
-    // ========================================================
-
-    const invitationRef = doc(
-      db,
-      "familyInvitations",
-      token
-    );
-
-    await setDoc(
-      invitationRef,
-      invitationData
-    );
-
-    console.log(
-      "家族招待データを作成しました:",
-      token
-    );
-
-    // ========================================================
-    // 招待リンクを生成
-    // ========================================================
-
-    /**
-     * 例:
-     * magonews://invite/abc123xyz
-     */
-    const invitationUrl =
-      Linking.createURL(
-        `invite/${token}`
+      const expiresAt = new Date(
+        now.getTime() +
+          INVITATION_EXPIRE_HOURS *
+            60 *
+            60 *
+            1000
       );
 
-    console.log(
-      "招待リンク:",
-      invitationUrl
-    );
+      const invitationRef =
+        doc(
+          db,
+          "familyInvitations",
+          token
+        );
 
-    return invitationUrl;
-  } catch (error) {
-    console.error(
-      "家族招待リンク作成エラー:",
-      error
-    );
+      await setDoc(
+        invitationRef,
+        {
+          familyUid,
+          token,
+          createdAt:
+            serverTimestamp(),
+          expiresAt,
+          used: false,
+        }
+      );
 
-    throw error;
-  }
-};
+      console.log(
+        "家族招待データを作成しました:",
+        token
+      );
+
+      // --------------------------------------------------
+      // MAGONEWSのカスタムURL
+      // --------------------------------------------------
+
+      const invitationUrl =
+        Linking.createURL(
+          `invite/${token}`,
+          {
+            scheme: "magonews",
+          }
+        );
+
+      console.log(
+        "招待リンク:",
+        invitationUrl
+      );
+
+      return invitationUrl;
+    } catch (error) {
+      console.error(
+        "家族招待リンク作成エラー:",
+        error
+      );
+
+      throw error;
+    }
+  };
 
 // ============================================================
 // 招待情報取得
@@ -142,241 +156,270 @@ export const createFamilyInvitation = async (
 /**
  * 招待Tokenから招待情報を取得する
  *
- * @param token 招待リンクに含まれているToken
- * @returns 招待情報。存在しない場合はnull
+ * @param token 招待Token
  */
-export const getFamilyInvitation = async (
-  token: string
-): Promise<FamilyInvitation | null> => {
-  if (!token) {
-    return null;
-  }
-
-  try {
-    // Token自体をDocument IDとして使用
-    const invitationRef = doc(
-      db,
-      "familyInvitations",
-      token
-    );
-
-    const snapshot =
-      await getDoc(invitationRef);
-
-    if (!snapshot.exists()) {
-      console.log(
-        "招待情報が見つかりません:",
-        token
-      );
-
+export const getFamilyInvitation =
+  async (
+    token: string
+  ): Promise<
+    FamilyInvitation | null
+  > => {
+    if (!token) {
       return null;
     }
 
-    const data =
-      snapshot.data();
+    try {
+      const invitationRef =
+        doc(
+          db,
+          "familyInvitations",
+          token
+        );
 
-    const invitation: FamilyInvitation = {
-      id: snapshot.id,
-      familyUid: data.familyUid,
-      token: data.token,
-      createdAt:
-        data.createdAt
-          ?.toDate?.()
-          ?.toISOString() ?? "",
-      expiresAt:
-        data.expiresAt
-          ?.toDate?.()
-          ?.toISOString() ?? "",
-      used:
-        data.used ?? false,
-    };
+      const snapshot =
+        await getDoc(
+          invitationRef
+        );
 
-    console.log(
-      "招待情報を取得しました:",
-      invitation
-    );
+      if (!snapshot.exists) {
+        return null;
+      }
 
-    return invitation;
-  } catch (error) {
-    console.error(
-      "招待情報取得エラー:",
-      error
-    );
+      const data =
+        snapshot.data();
 
-    throw error;
-  }
-};
+      if (!data) {
+        return null;
+      }
+
+      return {
+        id: snapshot.id,
+        familyUid:
+          data.familyUid,
+        token:
+          data.token,
+        createdAt:
+          data.createdAt?.toDate?.()
+            ?.toISOString?.() ?? "",
+        expiresAt:
+          data.expiresAt?.toDate?.()
+            ?.toISOString?.() ?? "",
+        used:
+          data.used ?? false,
+      };
+    } catch (error) {
+      console.error(
+        "招待情報取得エラー:",
+        error
+      );
+
+      throw error;
+    }
+  };
 
 // ============================================================
-// 家族との接続
+// 招待承認・家族接続
 // ============================================================
 
 /**
  * 高齢者側：
- * 招待を承認して家族と接続する
+ * 招待リンクのTokenを使って家族と接続する
  *
- * @param invitationToken 招待リンクから取得したToken
- * @param elderlyUid 高齢者側ユーザーのUID
+ * @param invitationToken 招待Token
  */
-export const acceptFamilyInvitation = async (
-  invitationToken: string,
-  elderlyUid: string
-): Promise<void> => {
-  if (!invitationToken) {
-    throw new Error(
-      "招待情報がありません。"
-    );
-  }
-
-  if (!elderlyUid) {
-    throw new Error(
-      "高齢者側ユーザーのUIDが取得できません。"
-    );
-  }
-
-  try {
-    // ========================================================
-    // 招待情報を取得
-    // ========================================================
-
-    const invitationRef = doc(
-      db,
-      "familyInvitations",
-      invitationToken
-    );
-
-    const invitationSnapshot =
-      await getDoc(invitationRef);
-
-    if (!invitationSnapshot.exists()) {
+export const acceptFamilyInvitation =
+  async (
+    invitationToken: string
+  ): Promise<void> => {
+    if (!invitationToken) {
       throw new Error(
-        "招待リンクが見つかりません。"
+        "招待情報がありません。"
       );
     }
 
-    const invitationData =
-      invitationSnapshot.data();
+    try {
+      // --------------------------------------------------
+      // 高齢者側の現在UID
+      // --------------------------------------------------
 
-    // ========================================================
-    // 招待の有効性確認
-    // ========================================================
+      const elderlyUser =
+        auth.currentUser;
 
-    const now = new Date();
+      if (!elderlyUser) {
+        throw new Error(
+          "ログインしている高齢者ユーザーが見つかりません。"
+        );
+      }
 
-    const expiresAt =
-      invitationData.expiresAt?.toDate?.();
+      const elderlyUid =
+        elderlyUser.uid;
 
-    // 有効期限確認
-    if (
-      expiresAt &&
-      expiresAt.getTime() < now.getTime()
-    ) {
-      throw new Error(
-        "この招待リンクは期限切れです。"
-      );
-    }
+      // --------------------------------------------------
+      // 招待情報取得
+      // --------------------------------------------------
 
-    // 使用済み確認
-    if (invitationData.used) {
-      throw new Error(
-        "この招待リンクはすでに使用されています。"
-      );
-    }
+      const invitationRef =
+        doc(
+          db,
+          "familyInvitations",
+          invitationToken
+        );
 
-    // 招待元の家族UID
-    const familyUid =
-      invitationData.familyUid;
+      const invitationSnapshot =
+        await getDoc(
+          invitationRef
+        );
 
-    if (!familyUid) {
-      throw new Error(
-        "招待元の家族情報が見つかりません。"
-      );
-    }
+      if (
+        !invitationSnapshot.exists
+      ) {
+        throw new Error(
+          "招待リンクが見つかりません。"
+        );
+      }
 
-    // ========================================================
-    // 接続データ作成
-    // ========================================================
+      const invitationData =
+        invitationSnapshot.data();
 
-    const connectionData: FamilyConnection = {
-      familyUid,
-      elderlyUid,
-      createdAt:
-        now.toISOString(),
-    };
+      if (!invitationData) {
+        throw new Error(
+          "招待情報を取得できませんでした。"
+        );
+      }
 
-    // ========================================================
-    // familyConnectionsに保存
-    // ========================================================
+      // --------------------------------------------------
+      // 有効期限確認
+      // --------------------------------------------------
 
-    const connectionId =
-      `${familyUid}_${elderlyUid}`;
+      const expiresAt =
+        invitationData.expiresAt
+          ?.toDate?.();
 
-    await setDoc(
-      doc(
-        db,
-        "familyConnections",
-        connectionId
-      ),
-      connectionData
-    );
+      if (
+        expiresAt &&
+        expiresAt.getTime() <
+          Date.now()
+      ) {
+        throw new Error(
+          "この招待リンクは期限切れです。"
+        );
+      }
 
-    console.log(
-      "家族接続情報を保存しました:",
-      connectionId
-    );
+      // --------------------------------------------------
+      // 使用済み確認
+      // --------------------------------------------------
 
-    // ========================================================
-    // 高齢者ユーザーにfamilyUidを保存
-    // ========================================================
+      if (
+        invitationData.used === true
+      ) {
+        throw new Error(
+          "この招待リンクはすでに使用されています。"
+        );
+      }
 
-    await setDoc(
-      doc(
-        db,
-        "users",
-        elderlyUid
-      ),
-      {
+      // --------------------------------------------------
+      // 家族UID確認
+      // --------------------------------------------------
+
+      const familyUid =
+        invitationData.familyUid;
+
+      if (!familyUid) {
+        throw new Error(
+          "招待元の家族情報が見つかりません。"
+        );
+      }
+
+      // --------------------------------------------------
+      // 接続情報
+      // --------------------------------------------------
+
+      const connectionId =
+        `${familyUid}_${elderlyUid}`;
+
+      const connectionData:
+        FamilyConnection = {
         familyUid,
-      },
-      {
-        merge: true,
-      }
-    );
+        elderlyUid,
+        createdAt:
+          new Date().toISOString(),
+      };
 
-    console.log(
-      "高齢者ユーザーにfamilyUidを保存しました:",
-      elderlyUid
-    );
+      // --------------------------------------------------
+      // familyConnections保存
+      // --------------------------------------------------
 
-    // ========================================================
-    // 招待を使用済みにする
-    // ========================================================
+      await setDoc(
+        doc(
+          db,
+          "familyConnections",
+          connectionId
+        ),
+        connectionData,
+        {
+          merge: true,
+        }
+      );
 
-    await setDoc(
-      invitationRef,
-      {
-        used: true,
-      },
-      {
-        merge: true,
-      }
-    );
+      console.log(
+        "家族接続情報を保存しました:",
+        connectionId
+      );
 
-    console.log(
-      "招待リンクを使用済みにしました:",
-      invitationToken
-    );
+      // --------------------------------------------------
+      // 高齢者users情報更新
+      // --------------------------------------------------
 
-    console.log(
-      "家族との接続が完了しました:",
-      familyUid
-    );
-  } catch (error) {
-    console.error(
-      "家族接続エラー:",
-      error
-    );
+      await setDoc(
+        doc(
+          db,
+          "users",
+          elderlyUid
+        ),
+        {
+          familyUid,
+          role: "elderly",
+          updatedAt:
+            serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
 
-    throw error;
-  }
-};
+      console.log(
+        "高齢者ユーザー情報を更新しました:",
+        elderlyUid
+      );
+
+      // --------------------------------------------------
+      // 招待を使用済みにする
+      // --------------------------------------------------
+
+      await setDoc(
+        invitationRef,
+        {
+          used: true,
+          usedBy: elderlyUid,
+          usedAt:
+            serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      console.log(
+        "家族との接続が完了しました:",
+        familyUid,
+        elderlyUid
+      );
+    } catch (error) {
+      console.error(
+        "家族接続エラー:",
+        error
+      );
+
+      throw error;
+    }
+  };
