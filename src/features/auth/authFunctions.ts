@@ -1,16 +1,11 @@
+import { signOut } from "firebase/auth";
 import {
-  getAuth,
-  signOut,
-} from "@react-native-firebase/auth";
-import {
-  getFirestore,
   doc,
   setDoc,
   serverTimestamp,
-} from "@react-native-firebase/firestore";
-
-const auth = getAuth();
-const db = getFirestore();
+} from "firebase/firestore";
+import { auth } from "../../firebase/firebaseAuth";
+import db from "../../firebase/firestore";
 
 // ============================================================
 // ユーザー情報

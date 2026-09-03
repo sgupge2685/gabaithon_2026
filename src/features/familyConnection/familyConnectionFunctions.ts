@@ -7,6 +7,7 @@ import {
 } from "@react-native-firebase/firestore";
 
 import { getAuth } from "@react-native-firebase/auth";
+import { auth as webAuth } from "../../firebase/firebaseAuth";
 
 import * as Linking from "expo-linking";
 
@@ -54,7 +55,7 @@ const generateInvitationToken = (): string => {
  * 現在ログインしている家族ユーザーのUIDを取得する
  */
 const getCurrentFamilyUid = (): string => {
-  const user = auth.currentUser;
+  const user = auth.currentUser ?? webAuth.currentUser;
 
   if (!user) {
     throw new Error(
@@ -243,7 +244,7 @@ export const acceptFamilyInvitation =
       // --------------------------------------------------
 
       const elderlyUser =
-        auth.currentUser;
+        auth.currentUser ?? webAuth.currentUser;
 
       if (!elderlyUser) {
         throw new Error(
