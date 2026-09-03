@@ -212,7 +212,8 @@ export default function LoginScreen({
         // ======================================================
 
         await saveUserProfile(
-          role
+          role,
+          user
         );
 
         console.log(
