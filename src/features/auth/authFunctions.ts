@@ -1,10 +1,11 @@
-import { signOut } from "firebase/auth";
+import { signOut as signOutWeb } from "firebase/auth";
+import { getAuth as getNativeAuth, signOut as signOutNative } from "@react-native-firebase/auth";
 import {
   doc,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { auth } from "../../firebase/firebaseAuth";
+import { auth as webAuth } from "../../firebase/firebaseAuth";
 import db from "../../firebase/firestore";
 
 // ============================================================
@@ -16,6 +17,27 @@ export type UserRole =
   | "elderly";
 
 // ============================================================
+// 現在のユーザー取得（Native/Web両対応）
+// ============================================================
+
+export const getAppCurrentUser = () => {
+  try {
+    const nativeAuth = getNativeAuth();
+    if (nativeAuth?.currentUser) {
+      return nativeAuth.currentUser;
+    }
+  } catch (e) {}
+
+  try {
+    if (webAuth?.currentUser) {
+      return webAuth.currentUser;
+    }
+  } catch (e) {}
+
+  return null;
+};
+
+// ============================================================
 // Firestoreへユーザー情報を保存
 // ============================================================
 
@@ -24,12 +46,13 @@ export type UserRole =
  * Firestore users/{uid} に保存する
  *
  * @param role ユーザーの役割
+ * @param explicitUser ログイン直後に取得したUserオブジェクト（任意）
  */
 export const saveUserProfile = async (
-  role: UserRole
+  role: UserRole,
+  explicitUser?: any
 ): Promise<void> => {
-  const user =
-    auth.currentUser;
+  const user = explicitUser ?? getAppCurrentUser();
 
   if (!user) {
     throw new Error(
@@ -80,7 +103,7 @@ export const saveUserProfile = async (
  * 現在ログインしているFirebaseユーザーを取得する
  */
 export const getCurrentUser = () => {
-  return auth.currentUser;
+  return getAppCurrentUser();
 };
 
 // ============================================================
@@ -91,7 +114,7 @@ export const getCurrentUser = () => {
  * 現在ログインしているか確認する
  */
 export const isLoggedIn = (): boolean => {
-  return auth.currentUser !== null;
+  return getAppCurrentUser() !== null;
 };
 
 // ============================================================
@@ -103,7 +126,12 @@ export const isLoggedIn = (): boolean => {
  */
 export const logout = async (): Promise<void> => {
   try {
-    await signOut(auth);
+    try {
+      await signOutNative(getNativeAuth());
+    } catch (e) {}
+    try {
+      await signOutWeb(webAuth);
+    } catch (e) {}
 
     console.log(
       "ログアウトしました"

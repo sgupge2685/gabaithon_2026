@@ -15,6 +15,7 @@ import { getAuth } from "firebase/auth";
 import { COLORS } from "../constants/colors";
 import { getNews } from "../firebase/firestore";
 import app from "../firebase/firebaseConfig";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
 
 const auth = getAuth(app);
 
@@ -44,7 +45,7 @@ export default function HomeScreen({ navigation }: any) {
     try {
       setLoading(true);
 
-      const firebaseUser = auth.currentUser;
+      const firebaseUser = getAppCurrentUser();
 
       // ログイン中のユーザーがいない場合
       if (!firebaseUser) {

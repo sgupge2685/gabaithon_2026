@@ -39,6 +39,7 @@ import app from "../firebase/firebaseConfig";
 import { COLORS } from "../constants/colors";
 import { saveMedia, saveNews } from "../firebase/firestore";
 import type { User } from "../types/User";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -60,7 +61,7 @@ export default function CreateNewsScreen({ navigation }: any) {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const firebaseUser = auth.currentUser;
+        const firebaseUser = getAppCurrentUser();
 
         if (!firebaseUser) {
           Alert.alert("エラー", "ログイン中のユーザーが見つかりません。");

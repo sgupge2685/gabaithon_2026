@@ -20,6 +20,7 @@ import {
   updateNews,
 } from "../firebase/firestore";
 import app from "../firebase/firebaseConfig";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
 
 const auth = getAuth(app);
 
@@ -45,7 +46,7 @@ export default function NewsScreen({ navigation }: any) {
       try {
         setLoading(true);
 
-        const firebaseUser = auth.currentUser;
+        const firebaseUser = getAppCurrentUser();
 
         if (!firebaseUser) {
           setNews(null);

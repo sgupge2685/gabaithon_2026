@@ -16,6 +16,7 @@ import type { News } from '../types/News';
 import { getNews } from '../firebase/firestore';
 import NewspaperCard from '../components/NewspaperCard';
 import app from '../firebase/firebaseConfig';
+import { getAppCurrentUser } from '../features/auth/authFunctions';
 
 const auth = getAuth(app);
 
@@ -48,7 +49,7 @@ export default function HistoryScreen({ navigation }: any) {
       try {
         setLoading(true);
 
-        const firebaseUser = auth.currentUser;
+        const firebaseUser = getAppCurrentUser();
 
         // ログイン中のユーザーがいない場合
         if (!firebaseUser) {

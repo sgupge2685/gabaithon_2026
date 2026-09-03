@@ -40,6 +40,7 @@ import app from "../firebase/firebaseConfig";
 import {
   createFamilyInvitation,
 } from "../features/familyConnection/familyConnectionFunctions";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
  
 const auth = getAuth(app); 
 const db = getFirestore(app); 
@@ -104,7 +105,7 @@ export default function FamilyHomeScreen() {
     try { 
       setLoading(true); 
  
-      const firebaseUser = auth.currentUser; 
+      const firebaseUser = getAppCurrentUser(); 
  
       if (!firebaseUser) { 
         setHistory([]); 
