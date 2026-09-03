@@ -6,11 +6,13 @@ import {
   doc,
   updateDoc,
   setDoc,
+  getDoc,
 } from "firebase/firestore";
 
 import app from "./firebaseConfig";
 import type { Media } from "../types/Media";
 import type { News } from "../types/News";
+import type { Weather } from "../types/Weather";
 
 const db = getFirestore(app);
 
@@ -128,6 +130,63 @@ export const updateNews = async (
     console.log("FirestoreのNEWS更新成功:", newsId);
   } catch (error) {
     console.error("FirestoreのNEWS更新失敗:", error);
+    throw error;
+  }
+};
+
+// =========================
+// Weather
+// =========================
+
+// WeatherデータをFirestoreに保存する
+export const saveWeather = async (
+  weather: Weather
+): Promise<void> => {
+  try {
+    // 地域名と日付を組み合わせてIDを作成
+    const weatherId = `${weather.locationName}_${weather.date}`;
+    const weatherRef = doc(db, "weather", weatherId);
+    await setDoc(weatherRef, weather);
+    console.log(
+      "FirestoreへのWeather保存成功:",
+      weatherId
+    );
+  } catch (error) {
+    console.error(
+      "FirestoreへのWeather保存失敗:",
+      error
+    );
+    throw error;
+  }
+};
+
+// FirestoreからWeatherデータを取得する
+export const getWeather = async (
+  locationName: string,
+  date: string
+): Promise<Weather | null> => {
+  try {
+    const weatherId = `${locationName}_${date}`;
+    const weatherRef = doc(db, "weather", weatherId);
+    const snapshot = await getDoc(weatherRef);
+    if (!snapshot.exists()) {
+      console.log(
+        "FirestoreにWeatherデータがありません:",
+        weatherId
+      );
+      return null;
+    }
+    const weather = snapshot.data() as Weather;
+    console.log(
+      "FirestoreからWeather取得成功:",
+      weatherId
+    );
+    return weather;
+  } catch (error) {
+    console.error(
+      "FirestoreのWeather取得失敗:",
+      error
+    );
     throw error;
   }
 };
