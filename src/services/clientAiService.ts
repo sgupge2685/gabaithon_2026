@@ -4,6 +4,8 @@
  * （Node.js の fs / Buffer に依存せず、標準 fetch で動作）
  */
 
+import type { Media } from "../types/Media";
+
 const GEMINI_API_KEY =
   process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
   process.env.GEMINI_API_KEY ||
@@ -279,6 +281,124 @@ JSON形式で {"title": "タイトル", "message": "本文"} のみを出力し�
     return {
       title: "こまめに水分補給を！",
       message: "喉が渇く前にお茶やお水を飲みましょう。室内でも涼しくしてお過ごしくださいね。",
+    };
+  }
+}
+
+export interface PreventionNewsResultClient {
+  title: string;
+  message: string;
+  photo: Media | null;
+  selectedReason: string;
+}
+
+/**
+ * 【写真選定 ➡️ 予防ニュース生成】
+ * 過去の家族写真の中から予防テーマに最も合致する写真をAIが1枚選定し、
+ * その写真の思い出に触れながら温かい予防ニュースを作成する。
+ */
+export async function generatePreventionNewsWithPhotoSelection(
+  familyPhotos: Media[] = [],
+  theme: string = "熱中症・水分補給",
+  locationName: string = "佐賀市"
+): Promise<PreventionNewsResultClient> {
+  const photosText = familyPhotos.length > 0
+    ? familyPhotos.map((p) => {
+        const tags = p.tags && p.tags.length > 0 ? `タグ: [${p.tags.join(', ')}]` : 'タグなし';
+        const caption = p.caption ? `家族コメント: 「${p.caption}」` : 'コメントなし';
+        return `[写真ID: ${p.id}] ${tags} | ${caption}`;
+      }).join('\n')
+    : '（家族写真はありません）';
+
+  const prompt = `
+あなたは高齢者向け見守りアプリ「MAGONEWS」の温かい健康・家族アドバイザーです。
+本日の地域【${locationName}】の予防テーマ【${theme}】と、家族が過去に投稿した写真一覧をもとに、
+【写真の選定】と【おじいちゃん・おばあちゃんに向けた予防NEWSの作成】を行ってください。
+
+【家族の写真候補リスト】
+${photosText}
+
+【ルール】
+1. **写真の選定 (selectedPhotoId)**:
+   - 家族写真リストの「タグ」と「家族コメント」を見て、今回の予防テーマ【${theme}】に最もふさわしい写真のIDを1つ選んでください。
+   - （例: 熱中症や水分補給なら「麦茶」「スイカ」「冷たい飲み物」「水遊び」、散歩・転倒なら「公園」「靴」「外遊び」など）
+   - 全く関係ない写真しかない場合や写真がない場合は、無理に選ばず必ず "none" としてください。
+
+2. **見出し (title)**:
+   - 15文字以内で、パッと注意が伝わる温かい見出しにしてください。
+
+3. **本文 (message)**:
+   - 80〜120文字程度で、優しく寄り添う言葉にしてください。
+   - **写真を選んだ場合**: その写真のコメントやタグ（例: 「みんなで飲んだ冷たい麦茶、おいしかったですね！」など）に必ず温かく触れながら、具体的な予防行動（「今日もこまめに水分をとって涼しく過ごしてくださいね」など）に繋げてください。
+   - **写真がない場合 ("none")**: 写真には触れず、気象・テーマに基づいた温かい予防アドバイスを作成してください。
+
+JSON形式で以下のキーのみを出力してください:
+{
+  "selectedPhotoId": "選んだ写真IDまたはnone",
+  "selectedReason": "選んだ理由",
+  "title": "見出しタイトル",
+  "message": "本文メッセージ"
+}
+`.trim();
+
+  try {
+    if (!GEMINI_API_KEY) {
+      const fallbackPhoto = familyPhotos.find(p => p.tags?.some(t => t.includes("麦茶") || t.includes("水") || t.includes("飲み物"))) || (familyPhotos.length > 0 ? familyPhotos[0] : null);
+      return {
+        title: "こまめに水分補給を！",
+        message: fallbackPhoto
+          ? `以前の「${fallbackPhoto.caption || "家族との写真"}」のように、喉が渇く前にこまめにお茶やお水を飲んで元気に過ごしてくださいね。（AI予防ニュース）`
+          : "喉が渇く前に少しずつお茶やお水を飲みましょう。室内でも涼しくしてお過ごしくださいね。（AI予防ニュース）",
+        photo: fallbackPhoto,
+        selectedReason: fallbackPhoto ? "水分補給に関連する写真を選定" : "写真なし",
+      };
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          response_mime_type: "application/json",
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Gemini APIエラー: ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (text) {
+      const parsed = JSON.parse(text);
+      const selectedId = parsed.selectedPhotoId ? String(parsed.selectedPhotoId).trim() : "none";
+      const matchedPhoto = (selectedId && selectedId !== "none")
+        ? familyPhotos.find((p) => p.id === selectedId) || null
+        : null;
+
+      return {
+        title: parsed.title ? String(parsed.title).trim() : "こまめに水分補給を！",
+        message: parsed.message ? `${String(parsed.message).trim()}（AI予防ニュース）` : "こまめに水分補給をして元気に過ごしましょう。（AI予防ニュース）",
+        photo: matchedPhoto,
+        selectedReason: parsed.selectedReason ? String(parsed.selectedReason).trim() : "",
+      };
+    }
+
+    throw new Error("応答のパースに失敗しました");
+  } catch (error) {
+    console.warn("予防ニュース・写真選定エラー:", error);
+    const fallbackPhoto = familyPhotos.length > 0 ? familyPhotos[0] : null;
+    return {
+      title: "こまめに水分補給を！",
+      message: fallbackPhoto
+        ? `家族の写真のように、今日も元気にお茶やお水を飲んで涼しくお過ごしくださいね。（AI予防ニュース）`
+        : "喉が渇く前に少しずつお茶やお水を飲みましょう。室内でも涼しくしてお過ごしくださいね。（AI予防ニュース）",
+      photo: fallbackPhoto,
+      selectedReason: "フォールバック選定",
     };
   }
 }

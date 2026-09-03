@@ -36,7 +36,7 @@ import {
 import { COLORS } from "../constants/colors"; 
 import type { News } from "../types/News"; 
 import type { User } from "../types/User"; 
-import { getNews, saveNews } from "../firebase/firestore"; 
+import { getNews, saveNews, getMedia } from "../firebase/firestore"; 
  
 import {
   createFamilyInvitation,
@@ -46,7 +46,10 @@ import {
   requestNotificationPermission,
   sendLocalNotification,
 } from "../services/notificationService";
-import { generatePreventionNewsClient } from "../services/clientAiService";
+import {
+  generatePreventionNewsClient,
+  generatePreventionNewsWithPhotoSelection,
+} from "../services/clientAiService";
  
 const auth = getAuth(); 
 const db = getFirestore(); 
@@ -352,19 +355,35 @@ export default function FamilyHomeScreen() {
 
     try {
       setLoading(true);
-      console.log("Gemini AI による予防ニュース生成を開始...");
-      const newsContent = await generatePreventionNewsClient("水分補給・熱中症予防・室温管理");
-      console.log("生成された予防ニュース:", newsContent);
+
+      // 1. 過去の家族写真一覧を取得
+      console.log("過去の家族写真を取得中...");
+      const firebaseUser = getAppCurrentUser();
+      const allMedia = await getMedia();
+      const familyPhotos = allMedia.filter(
+        (m) => !m.uploadedBy || (firebaseUser && m.uploadedBy === firebaseUser.uid) || (m.tags && m.tags.length > 0)
+      );
+      console.log(`写真候補数: ${familyPhotos.length}件`);
+
+      // 2. 写真選定 ➡️ 予防ニュース生成を一撃実行！
+      console.log("Gemini AI による写真選定＆予防ニュース生成を開始...");
+      const result = await generatePreventionNewsWithPhotoSelection(
+        familyPhotos,
+        "熱中症・水分補給",
+        elderlyUser.location || "佐賀市"
+      );
+      console.log("生成された予防ニュース結果:", result);
 
       const now = new Date().toISOString();
+      const photoUrl = result.photo ? result.photo.url : "";
 
-      // Firestore の news コレクションに保存！
+      // 3. Firestore の news コレクションに選定写真付きで保存！
       await saveNews({
         deliveredTo: elderlyUser.id,
         type: "prevention",
-        title: newsContent.title,
-        message: newsContent.message,
-        mediaUrl: "",
+        title: result.title,
+        message: result.message,
+        mediaUrl: photoUrl,
         isRead: false,
         isAiGeneratedImage: false,
         createdAt: now,
@@ -373,12 +392,12 @@ export default function FamilyHomeScreen() {
       // 家族側にも完了通知を表示
       sendLocalNotification(
         "🎉 予防ニュースを届けました！",
-        `見出し: 「${newsContent.title}」をおじいちゃん・おばあちゃんへ届けました`
+        `見出し: 「${result.title}」`
       );
 
       Alert.alert(
         "予防ニュースを届けました！",
-        `見出し: 「${newsContent.title}」\n${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに予防ニュースを配信しました！`
+        `見出し: 「${result.title}」\n${result.photo ? "📷 家族写真が選定されました！\n" : ""}${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに予防ニュースを配信しました！`
       );
 
       fetchHistory();
