@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  TextInput,
 } from "react-native";
 
 import { SafeAreaView as SafeAreaViewContext } from "react-native-safe-area-context";
@@ -38,6 +39,9 @@ export default function AddFamilyScreen({
 }: any) {
   const [invitationToken, setInvitationToken] =
     useState<string | null>(null);
+
+  const [manualToken, setManualToken] =
+    useState("");
 
   const [loading, setLoading] =
     useState(true);
@@ -74,11 +78,17 @@ export default function AddFamilyScreen({
   // --------------------------------------------------
 
   const handleConnect =
-    async () => {
-      if (!invitationToken) {
+    async (tokenToUse?: string) => {
+      const rawToken = (tokenToUse ?? manualToken ?? invitationToken ?? "").trim();
+      // URLがそのまま貼られた場合でもトークンを抽出
+      const effectiveToken = rawToken.includes("invite/")
+        ? rawToken.split("invite/")[1].split("?")[0].replace(/\/$/, "")
+        : rawToken;
+
+      if (!effectiveToken) {
         Alert.alert(
-          "招待リンクがありません",
-          "ご家族から送られた招待リンクを開いてください。"
+          "招待コードがありません",
+          "招待コードまたはリンクを入力してください。"
         );
 
         return;
@@ -112,7 +122,7 @@ export default function AddFamilyScreen({
         setConnecting(true);
 
         await acceptFamilyInvitation(
-          invitationToken
+          effectiveToken
         );
 
         Alert.alert(
@@ -183,22 +193,49 @@ export default function AddFamilyScreen({
               styles.description
             }
           >
-            ご家族から送られた招待リンクを開くと、
-            {"\n"}
-            自動的に招待情報が表示されます。
+            ご家族から送られた招待コード（またはリンク）を入力して接続してください。
           </Text>
 
-          <View
-            style={styles.infoBox}
+          {/* 招待コードの直接入力欄 */}
+          <TextInput
+            style={styles.input}
+            placeholder="招待コードまたはURLを貼り付け"
+            placeholderTextColor={COLORS.textSecondary}
+            value={manualToken}
+            onChangeText={setManualToken}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              (!manualToken.trim() || connecting) &&
+                styles.buttonDisabled,
+            ]}
+            onPress={() =>
+              handleConnect(manualToken)
+            }
+            disabled={
+              !manualToken.trim() || connecting
+            }
+            activeOpacity={0.8}
           >
-            <Text
-              style={styles.infoText}
-            >
-              現在、招待リンクがありません。
-              {"\n\n"}
-              ご家族にMAGONEWSの招待リンクを送ってもらってください。
-            </Text>
-          </View>
+            {connecting ? (
+              <ActivityIndicator
+                size="small"
+                color={COLORS.white}
+              />
+            ) : (
+              <Text
+                style={
+                  styles.buttonText
+                }
+              >
+                このコードで接続する
+              </Text>
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.backButton}
@@ -268,8 +305,8 @@ export default function AddFamilyScreen({
             connecting &&
               styles.buttonDisabled,
           ]}
-          onPress={
-            handleConnect
+          onPress={() =>
+            handleConnect()
           }
           disabled={connecting}
           activeOpacity={0.8}
@@ -382,6 +419,19 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 25,
     textAlign: "center",
+  },
+
+  input: {
+    width: "100%",
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.disabled,
+    borderRadius: 12,
+    height: 54,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: COLORS.text,
+    marginBottom: 20,
   },
 
   tokenBox: {
