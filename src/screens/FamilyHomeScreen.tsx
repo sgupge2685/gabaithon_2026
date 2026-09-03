@@ -18,7 +18,7 @@ import {
  
 import { useNavigation } from "@react-navigation/native"; 
  
-import { getAuth } from "firebase/auth"; 
+import { getAuth } from "@react-native-firebase/auth";
  
 import { 
   getFirestore, 
@@ -29,21 +29,20 @@ import {
   where, 
   limit, 
   getDocs, 
-} from "firebase/firestore"; 
+} from "@react-native-firebase/firestore"; 
  
 import { COLORS } from "../constants/colors"; 
 import type { News } from "../types/News"; 
 import type { User } from "../types/User"; 
 import { getNews } from "../firebase/firestore"; 
-import app from "../firebase/firebaseConfig"; 
-
+ 
 import {
   createFamilyInvitation,
 } from "../features/familyConnection/familyConnectionFunctions";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
  
-const auth = getAuth(app); 
-const db = getFirestore(app); 
+const auth = getAuth(); 
+const db = getFirestore(); 
  
 const formatDate = (dateInput: any) => { 
   if (!dateInput) return ""; 

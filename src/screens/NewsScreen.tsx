@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { getAuth } from "firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
 
 import NewspaperCard from "../components/NewspaperCard";
 import type { News } from "../types/News";
@@ -19,10 +19,9 @@ import {
   getNews,
   updateNews,
 } from "../firebase/firestore";
-import app from "../firebase/firebaseConfig";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
 
-const auth = getAuth(app);
+const auth = getAuth();
 
 const getTime = (dateInput: any) => {
   if (!dateInput) return 0;

@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import * as ImagePicker from "expo-image-picker";
 
-import { getAuth } from "firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
 import {
   getFirestore,
   doc,
@@ -26,7 +26,7 @@ import {
   where,
   limit,
   getDocs,
-} from "firebase/firestore";
+} from "@react-native-firebase/firestore";
 
 import {
   getStorage,
@@ -41,8 +41,8 @@ import { saveMedia, saveNews } from "../firebase/firestore";
 import type { User } from "../types/User";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+const auth = getAuth();
+const db = getFirestore();
 const storage = getStorage(app);
 
 export default function CreateNewsScreen({ navigation }: any) {
