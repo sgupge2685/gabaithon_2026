@@ -9,10 +9,10 @@ import {
   StyleSheet,
   FlatList,
   Image,
-  SafeAreaView,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useNavigation } from "@react-navigation/native";
 

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Keyboard,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAuth } from "firebase/auth";
 import {
@@ -206,14 +207,15 @@ export default function AddFamilyScreen() {
   // 画面描画
   // --------------------------------------------------
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         <Text style={styles.title}>家族とつながる</Text>
 
         <Text style={styles.roleText}>
@@ -302,13 +304,18 @@ export default function AddFamilyScreen() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
-  );
+  </SafeAreaView>
+);
 }
 
 // --------------------------------------------------
 // Styles
 // --------------------------------------------------
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

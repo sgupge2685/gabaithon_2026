@@ -3,12 +3,12 @@ import {
   ScrollView,
   Text,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   View,
   TouchableOpacity, // 追加: ボタン用の部品
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAuth } from "firebase/auth";
 
@@ -165,11 +165,9 @@ export default function NewsScreen({ navigation }: any) {
             />
           </View>
         ) : (
-          <View style={styles.centerBox}>
-            <Text style={styles.emptyText}>
-              まだ新聞が届いていません。
-            </Text>
-          </View>
+          <Text style={styles.emptyText}>
+            まだ新聞が届いていません。
+          </Text>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -248,6 +246,8 @@ const styles = StyleSheet.create({
   },
 
   emptyText: {
+    textAlign: "center",
+    marginTop: 40,
     fontSize: 18,
     color: COLORS.textSecondary,
   },

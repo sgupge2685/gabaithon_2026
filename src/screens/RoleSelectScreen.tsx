@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { COLORS } from "../constants/colors";
 
 export default function RoleSelectScreen({ navigation }: any) {
