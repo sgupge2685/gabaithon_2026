@@ -2,10 +2,11 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { doc, setDoc } from "firebase/firestore";
-
-import { auth } from "../../firebase/firebaseAuth";
+import { doc, setDoc } from "@react-native-firebase/firestore";
+import { getAuth } from "@react-native-firebase/auth";
 import db from "../../firebase/firestore";
+
+const auth = getAuth();
 
 // ============================================================
 // 通知表示の設定
