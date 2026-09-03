@@ -29,6 +29,7 @@ import {
   where, 
   limit, 
   getDocs, 
+  deleteDoc,
 } from "@react-native-firebase/firestore"; 
  
 import { COLORS } from "../constants/colors"; 
@@ -159,28 +160,45 @@ export default function FamilyHomeScreen() {
 
       let elderlySnapshot: any = null;
 
-      if (
-        myUserWithFamilyUid.familyUid
-      ) {
-        const elderlyQuery = query(
-          usersRef,
-          where(
-            "familyUid",
-            "==",
-            firebaseUser.uid
-          ),
-          where(
-            "role",
-            "==",
-            "elderly"
-          ),
-          limit(1)
+      // 1. 新方式: 高齢者側に familyUid として家族のUIDが保存されている
+      const elderlyQuery = query(
+        usersRef,
+        where(
+          "familyUid",
+          "==",
+          firebaseUser.uid
+        ),
+        where(
+          "role",
+          "==",
+          "elderly"
+        ),
+        limit(1)
+      );
+
+      elderlySnapshot =
+        await getDocs(
+          elderlyQuery
         );
 
-        elderlySnapshot =
-          await getDocs(
-            elderlyQuery
-          );
+      // 2. 接続履歴 (familyConnections) から探す
+      if (!elderlySnapshot || elderlySnapshot.empty) {
+        const connectionsRef = collection(db, "familyConnections");
+        const connQuery = query(
+          connectionsRef,
+          where("familyUid", "==", firebaseUser.uid),
+          limit(1)
+        );
+        const connSnapshot = await getDocs(connQuery);
+        if (!connSnapshot.empty) {
+          const elderlyUid = connSnapshot.docs[0].data().elderlyUid;
+          if (elderlyUid) {
+            const elderlyDoc = await getDoc(doc(db, "users", elderlyUid));
+            if (elderlyDoc.exists()) {
+              elderlySnapshot = { empty: false, docs: [elderlyDoc] };
+            }
+          }
+        }
       }
 
       // --------------------------------------------------
@@ -301,6 +319,37 @@ export default function FamilyHomeScreen() {
         setInviting(false);
       }
     };
+
+  const handleResetNews = () => {
+    Alert.alert(
+      "ニュースの削除",
+      "送信済みのニュースデータをすべて削除しますか？\n（おじいちゃん・おばあちゃん側も未読状態に戻ります）",
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除する",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const newsSnapshot = await getDocs(collection(db, "news"));
+              const deletePromises = newsSnapshot.docs.map((d) =>
+                deleteDoc(doc(db, "news", d.id))
+              );
+              await Promise.all(deletePromises);
+              setHistory([]);
+              Alert.alert("削除完了", "ニュースデータをすべて削除しました。");
+            } catch (err) {
+              console.error("ニュース削除エラー:", err);
+              Alert.alert("エラー", "ニュースの削除に失敗しました。");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
  
   const renderItem = ({ 
     item, 
@@ -403,6 +452,15 @@ export default function FamilyHomeScreen() {
         >
           招待リンクを作成して、高齢者の方へ送ることができます。
         </Text>
+
+        {/* デモ用ニュース削除ボタン */}
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleResetNews}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.resetButtonText}>🗑️ 送信履歴を全削除（デモ用リセット）</Text>
+        </TouchableOpacity>
       </View>
  
       {loading ? ( 
@@ -510,6 +568,21 @@ const styles = StyleSheet.create({
 
   buttonDisabled: {
     opacity: 0.6,
+  },
+
+  resetButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+    alignSelf: "center",
+  },
+
+  resetButtonText: {
+    fontSize: 13,
+    color: "#DC2626",
+    fontWeight: "600",
   },
  
   listContent: { 

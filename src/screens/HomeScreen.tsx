@@ -163,6 +163,17 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           </View>
         </TouchableOpacity>
+
+        {/* 3. 家族とつながる（招待コード連携ボタン） */}
+        <TouchableOpacity
+          style={styles.connectFamilyButton}
+          onPress={() => navigation.navigate("AddFamily", {})}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.connectFamilyButtonText}>
+            👨‍👩‍👧 ご家族とつながる（招待コード入力）
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -389,5 +400,23 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#FF3B30",
     marginLeft: 8,
+  },
+
+  connectFamilyButton: {
+    marginTop: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    alignItems: "center",
+    width: "100%",
+  },
+
+  connectFamilyButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
 });
