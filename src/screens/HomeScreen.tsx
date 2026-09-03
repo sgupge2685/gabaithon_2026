@@ -11,12 +11,24 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getAuth } from "@react-native-firebase/auth";
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  query,
+  where,
+} from "@react-native-firebase/firestore";
 
 import { COLORS } from "../constants/colors";
 import { getNews } from "../firebase/firestore";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
+import {
+  requestNotificationPermission,
+  sendLocalNotification,
+} from "../services/notificationService";
 
 const auth = getAuth();
+const db = getFirestore();
 
 export default function HomeScreen({ navigation }: any) {
   const [hasNewNews, setHasNewNews] = useState(false);
@@ -28,6 +40,64 @@ export default function HomeScreen({ navigation }: any) {
   const date = today.getDate();
   const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
   const dayOfWeek = dayNames[today.getDay()];
+
+  // リアルタイムでニュース到着を監視して通知を出す
+  useEffect(() => {
+    requestNotificationPermission();
+
+    const firebaseUser = getAppCurrentUser();
+    if (!firebaseUser) return;
+
+    let initialLoad = true;
+    const notifiedNewsIds = new Set<string>();
+
+    const q = query(
+      collection(db, "news"),
+      where("deliveredTo", "==", firebaseUser.uid),
+      where("isRead", "==", false)
+    );
+
+    const unsubscribeSnapshot = onSnapshot(
+      q,
+      (snapshot) => {
+        if (initialLoad) {
+          initialLoad = false;
+          snapshot.docs.forEach((d) => notifiedNewsIds.add(d.id));
+          setHasNewNews(!snapshot.empty);
+          return;
+        }
+
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const newsId = change.doc.id;
+            // 既に通知済みのニュースなら重複スキップ
+            if (notifiedNewsIds.has(newsId)) {
+              return;
+            }
+            notifiedNewsIds.add(newsId);
+
+            const newNews = change.doc.data();
+            const isPrevention = newNews.type === "prevention";
+            const notificationTitle = isPrevention
+              ? "⚠️ くらしの予防ニュースが届きました！"
+              : "📰 まごから新しいニュースが届いたよ！";
+
+            sendLocalNotification(
+              notificationTitle,
+              newNews.title || "新しいニュースが届きました",
+              { screen: "News" }
+            );
+            setHasNewNews(true);
+          }
+        });
+      },
+      (error) => {
+        console.warn("ニュース監視エラー:", error);
+      }
+    );
+
+    return () => unsubscribeSnapshot();
+  }, []);
 
   // 画面が表示されるたびに新着ニュースがあるかチェックする
   useEffect(() => {
