@@ -50,6 +50,7 @@ import {
   generatePreventionNewsClient,
   generatePreventionNewsWithPhotoSelection,
 } from "../services/clientAiService";
+import { getWeatherData } from "../services/weatherService";
  
 const auth = getAuth(); 
 const db = getFirestore(); 
@@ -365,19 +366,30 @@ export default function FamilyHomeScreen() {
       );
       console.log(`写真候補数: ${familyPhotos.length}件`);
 
-      // 2. 写真選定 ➡️ 予防ニュース生成を一撃実行！
+      // 2. 地域のリアルタイム気象データを取得
+      const locationName = elderlyUser.location || "佐賀市";
+      console.log(`${locationName} の気象データを取得中...`);
+      let weather = null;
+      try {
+        weather = await getWeatherData(locationName);
+        console.log("取得した気象データ:", weather);
+      } catch (weatherErr) {
+        console.warn("気象データ取得失敗（デフォルト値で継続）:", weatherErr);
+      }
+
+      // 3. 写真選定 ➡️ 予防ニュース生成を一撃実行！
       console.log("Gemini AI による写真選定＆予防ニュース生成を開始...");
       const result = await generatePreventionNewsWithPhotoSelection(
         familyPhotos,
-        "熱中症・水分補給",
-        elderlyUser.location || "佐賀市"
+        weather,
+        locationName
       );
       console.log("生成された予防ニュース結果:", result);
 
       const now = new Date().toISOString();
       const photoUrl = result.photo ? result.photo.url : "";
 
-      // 3. Firestore の news コレクションに選定写真付きで保存！
+      // 4. Firestore の news コレクションに保存！
       await saveNews({
         deliveredTo: elderlyUser.id,
         type: "prevention",
@@ -395,9 +407,13 @@ export default function FamilyHomeScreen() {
         `見出し: 「${result.title}」`
       );
 
+      const photoStatusMsg = result.photo
+        ? `📷 テーマ「${result.theme}」に合う家族写真が選定されました！`
+        : `📝 今回は写真なし（気象予防アドバイスのみ）で配信しました。`;
+
       Alert.alert(
         "予防ニュースを届けました！",
-        `見出し: 「${result.title}」\n${result.photo ? "📷 家族写真が選定されました！\n" : ""}${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに予防ニュースを配信しました！`
+        `【テーマ】${result.theme}\n【見出し】「${result.title}」\n\n${photoStatusMsg}\n\n${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに予防ニュースを配信しました！`
       );
 
       fetchHistory();
