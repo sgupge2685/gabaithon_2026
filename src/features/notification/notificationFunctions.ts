@@ -358,7 +358,7 @@ export const sendLocalTestNotification =
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "MAGONEWS",
-          body: "今日の家族NEWSが届きました！",
+          body: "今日の家族ニュースが届きました！",
           data: {
             type: "news",
             newsId: "test-news-id",

@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  SafeAreaView,
   ActivityIndicator,
   TouchableOpacity
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAuth } from 'firebase/auth';
 
@@ -122,7 +122,7 @@ export default function HistoryScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>
-          NEWS履歴
+          ニュース履歴
         </Text>
       </View>
 
@@ -134,7 +134,7 @@ export default function HistoryScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            まだNEWSがありません。
+            まだニュースがありません。
           </Text>
         }
       />

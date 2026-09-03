@@ -9,10 +9,10 @@ import {
   StyleSheet,
   FlatList,
   Image,
-  SafeAreaView,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useNavigation } from "@react-navigation/native";
 
@@ -257,7 +257,7 @@ export default function FamilyHomeScreen() {
 
       {elderlyUser && (
         <Text style={styles.targetText}>
-          {elderlyUser.name}さんへのNEWS
+          {elderlyUser.name}さんへのニュース
         </Text>
       )}
 
@@ -279,9 +279,9 @@ export default function FamilyHomeScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
-              まだNEWSを送っていません。
+              まだニュースを送っていません。
               {"\n"}
-              最初のNEWSを送ってみましょう！
+              最初のニュースを送ってみましょう！
             </Text>
           }
         />

@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Image,
   ActivityIndicator,
   Alert,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -209,7 +209,7 @@ export default function CreateNewsScreen({ navigation }: any) {
     }
 
     if (!imageUri) {
-      Alert.alert("写真を選択してください", "NEWSに載せる写真を選んでください。");
+      Alert.alert("写真を選択してください", "ニュースに載せる写真を選んでください。");
       return;
     }
 
@@ -238,7 +238,7 @@ export default function CreateNewsScreen({ navigation }: any) {
       await saveNews({
         deliveredTo: elderlyUser.id,
         type: "family",
-        title: "今日の家族NEWS",
+        title: "今日の家族ニュース",
         message: finalMessage,
         mediaUrl: mediaUrl,
         isRead: false,
@@ -248,7 +248,7 @@ export default function CreateNewsScreen({ navigation }: any) {
 
       Alert.alert(
         "送信しました！",
-        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんにNEWSを届けました。`,
+        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんにニュースを届けました。`,
         [
           {
             text: "OK",
@@ -318,7 +318,7 @@ export default function CreateNewsScreen({ navigation }: any) {
                 resizeMode="cover"
               />
             ) : (
-              <Text style={styles.imagePickerText}>NEWSに載せる写真を選ぶ</Text>
+              <Text style={styles.imagePickerText}>ニュースに載せる写真を選ぶ</Text>
             )}
           </TouchableOpacity>
 
@@ -345,7 +345,7 @@ export default function CreateNewsScreen({ navigation }: any) {
             {sending ? (
               <ActivityIndicator size="small" color={COLORS.white} />
             ) : (
-              <Text style={styles.sendButtonText}>NEWSを送る</Text>
+              <Text style={styles.sendButtonText}>ニュースを送る</Text>
             )}
           </TouchableOpacity>
         </ScrollView>
