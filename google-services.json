@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "681751269117",
+    "project_id": "magonews-571c1",
+    "storage_bucket": "magonews-571c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:681751269117:android:3ce95516ce1153cfba3894",
+        "android_client_info": {
+          "package_name": "com.gabaithon.magonews"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7vLwi1Jfre4gb6I-uz3dfFhCjSt7RiXU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
