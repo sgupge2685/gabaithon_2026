@@ -40,6 +40,7 @@ import { COLORS } from "../constants/colors";
 import {
   saveMediaWithId,
   updateMedia,
+  saveNews,
 } from "../firebase/firestore";
 import type { User } from "../types/User";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
@@ -491,18 +492,33 @@ export default function CreateNewsScreen({ navigation }: any) {
       );
 
       // --------------------------------------------------
-      // ここから先はCloud Functionsが自動処理
-      //
-      // 1. Storageへの画像アップロードを検知
-      // 2. Geminiで画像をタグ付け
-      // 3. Mediaへtags保存
-      // 4. GeminiでNEWS本文を生成
-      // 5. newsへNEWS保存
+      // 即座にNEWSを作成してFirestoreへ保存
+      // 送信履歴やおばあちゃん画面に即時反映されるようにする
       // --------------------------------------------------
+
+      const finalMessage = caption.trim()
+        ? caption.trim()
+        : "家族から元気な写真が届きました！今日も良い一日になりますように。";
+
+      await saveNews({
+        deliveredTo: elderlyUser.id,
+        type: "family",
+        title: "今日の家族ニュース",
+        message: finalMessage,
+        mediaUrl: mediaUrl,
+        isRead: false,
+        isAiGeneratedImage: false,
+        createdAt: now,
+      });
+
+      console.log(
+        "NEWSをFirestoreに即時保存しました:",
+        mediaId
+      );
 
       Alert.alert(
         "送信しました！",
-        "写真を送信しました。\nAIが写真を分析してニュースを作成します。",
+        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに写真を届けました！`,
         [
           {
             text: "OK",
