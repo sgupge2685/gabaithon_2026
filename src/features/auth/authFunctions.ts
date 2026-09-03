@@ -2,15 +2,13 @@ import {
   getAuth,
   signOut,
 } from "@react-native-firebase/auth";
+
 import {
   getFirestore,
   doc,
   setDoc,
   serverTimestamp,
 } from "@react-native-firebase/firestore";
-
-const auth = getAuth();
-const db = getFirestore();
 
 // ============================================================
 // ユーザー情報
@@ -29,12 +27,23 @@ export type UserRole =
  * Firestore users/{uid} に保存する
  *
  * @param role ユーザーの役割
+ * @param passedUser 認証成功時に取得したユーザー情報
  */
 export const saveUserProfile = async (
-  role: UserRole
+  role: UserRole,
+  passedUser?: {
+    uid: string;
+    phoneNumber?: string | null;
+  }
 ): Promise<void> => {
+  const auth =
+    getAuth();
+
+  const db =
+    getFirestore();
+
   const user =
-    auth.currentUser;
+    passedUser ?? auth.currentUser;
 
   if (!user) {
     throw new Error(
@@ -85,8 +94,19 @@ export const saveUserProfile = async (
  * 現在ログインしているFirebaseユーザーを取得する
  */
 export const getCurrentUser = () => {
+  const auth =
+    getAuth();
+
   return auth.currentUser;
 };
+
+/**
+ * 現在ログインしているFirebaseユーザーを取得する
+ *
+ * 既存画面との互換性のために用意
+ */
+export const getAppCurrentUser =
+  getCurrentUser;
 
 // ============================================================
 // ログイン状態確認
@@ -96,6 +116,9 @@ export const getCurrentUser = () => {
  * 現在ログインしているか確認する
  */
 export const isLoggedIn = (): boolean => {
+  const auth =
+    getAuth();
+
   return auth.currentUser !== null;
 };
 
@@ -108,7 +131,12 @@ export const isLoggedIn = (): boolean => {
  */
 export const logout = async (): Promise<void> => {
   try {
-    await signOut(auth);
+    const auth =
+      getAuth();
+
+    await signOut(
+      auth
+    );
 
     console.log(
       "ログアウトしました"

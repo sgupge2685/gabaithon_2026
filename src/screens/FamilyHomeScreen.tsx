@@ -18,7 +18,7 @@ import {
  
 import { useNavigation } from "@react-navigation/native"; 
  
-import { getAuth } from "firebase/auth"; 
+import { getAuth } from "@react-native-firebase/auth";
  
 import { 
   getFirestore, 
@@ -29,20 +29,27 @@ import {
   where, 
   limit, 
   getDocs, 
-} from "firebase/firestore"; 
+  deleteDoc,
+  onSnapshot,
+} from "@react-native-firebase/firestore"; 
  
 import { COLORS } from "../constants/colors"; 
 import type { News } from "../types/News"; 
 import type { User } from "../types/User"; 
-import { getNews } from "../firebase/firestore"; 
-import app from "../firebase/firebaseConfig"; 
-
+import { getNews, saveNews } from "../firebase/firestore"; 
+ 
 import {
   createFamilyInvitation,
 } from "../features/familyConnection/familyConnectionFunctions";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
+import {
+  requestNotificationPermission,
+  sendLocalNotification,
+} from "../services/notificationService";
+import { generatePreventionNewsClient } from "../services/clientAiService";
  
-const auth = getAuth(app); 
-const db = getFirestore(app); 
+const auth = getAuth(); 
+const db = getFirestore(); 
  
 const formatDate = (dateInput: any) => { 
   if (!dateInput) return ""; 
@@ -89,6 +96,8 @@ export default function FamilyHomeScreen() {
     useState(false); 
  
   useEffect(() => { 
+    requestNotificationPermission();
+
     const unsubscribe = 
       navigation.addListener( 
         "focus", 
@@ -96,15 +105,66 @@ export default function FamilyHomeScreen() {
       ); 
  
     fetchHistory(); 
+
+    // リアルタイムでおばあちゃんの「みたよ」を監視
+    let initialLoad = true;
+    const notifiedReadIds = new Set<string>();
+
+    const q = query(
+      collection(db, "news"),
+      where("type", "==", "family")
+    );
+
+    const unsubscribeSnapshot = onSnapshot(
+      q,
+      (snapshot) => {
+        if (initialLoad) {
+          initialLoad = false;
+          snapshot.docs.forEach((d) => {
+            if (d.data().isRead) {
+              notifiedReadIds.add(d.id);
+            }
+          });
+          return;
+        }
+
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const newsId = change.doc.id;
+            const data = change.doc.data();
+            if (data.isRead === true) {
+              // 既に通知済みのニュースなら重複スキップ
+              if (notifiedReadIds.has(newsId)) {
+                return;
+              }
+              notifiedReadIds.add(newsId);
+
+              sendLocalNotification(
+                "❤️ おばあちゃんがニュースを読みました！",
+                `「${data.title || "今日の家族ニュース"}」に「みたよ」が届きました！`,
+                { screen: "FamilyHome" }
+              );
+              fetchHistory();
+            }
+          }
+        });
+      },
+      (error) => {
+        console.warn("送信履歴監視エラー:", error);
+      }
+    );
  
-    return unsubscribe; 
+    return () => {
+      unsubscribe();
+      unsubscribeSnapshot();
+    }; 
   }, [navigation]); 
  
   const fetchHistory = async () => { 
     try { 
       setLoading(true); 
  
-      const firebaseUser = auth.currentUser; 
+      const firebaseUser = getAppCurrentUser(); 
  
       if (!firebaseUser) { 
         setHistory([]); 
@@ -159,28 +219,45 @@ export default function FamilyHomeScreen() {
 
       let elderlySnapshot: any = null;
 
-      if (
-        myUserWithFamilyUid.familyUid
-      ) {
-        const elderlyQuery = query(
-          usersRef,
-          where(
-            "familyUid",
-            "==",
-            firebaseUser.uid
-          ),
-          where(
-            "role",
-            "==",
-            "elderly"
-          ),
-          limit(1)
+      // 1. 新方式: 高齢者側に familyUid として家族のUIDが保存されている
+      const elderlyQuery = query(
+        usersRef,
+        where(
+          "familyUid",
+          "==",
+          firebaseUser.uid
+        ),
+        where(
+          "role",
+          "==",
+          "elderly"
+        ),
+        limit(1)
+      );
+
+      elderlySnapshot =
+        await getDocs(
+          elderlyQuery
         );
 
-        elderlySnapshot =
-          await getDocs(
-            elderlyQuery
-          );
+      // 2. 接続履歴 (familyConnections) から探す
+      if (!elderlySnapshot || elderlySnapshot.empty) {
+        const connectionsRef = collection(db, "familyConnections");
+        const connQuery = query(
+          connectionsRef,
+          where("familyUid", "==", firebaseUser.uid),
+          limit(1)
+        );
+        const connSnapshot = await getDocs(connQuery);
+        if (!connSnapshot.empty) {
+          const elderlyUid = connSnapshot.docs[0].data().elderlyUid;
+          if (elderlyUid) {
+            const elderlyDoc = await getDoc(doc(db, "users", elderlyUid));
+            if (elderlyDoc.exists()) {
+              elderlySnapshot = { empty: false, docs: [elderlyDoc] };
+            }
+          }
+        }
       }
 
       // --------------------------------------------------
@@ -244,7 +321,7 @@ export default function FamilyHomeScreen() {
       const familyNews = newsList 
         .filter( 
           (news) => 
-            news.type === "family" && 
+            (news.type === "family" || news.type === "prevention") && 
             news.deliveredTo === elderlyData.id 
         ) 
         .sort( 
@@ -262,6 +339,55 @@ export default function FamilyHomeScreen() {
     } finally { 
       setLoading(false); 
     } 
+  }; 
+
+  // --------------------------------------------------
+  // 予防ニュースをAIで自動生成して高齢者へ配信
+  // --------------------------------------------------
+  const handleSendPreventionNews = async () => {
+    if (!elderlyUser) {
+      Alert.alert("エラー", "接続先の高齢者が見つかりません。先に招待を行ってください。");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("Gemini AI による予防ニュース生成を開始...");
+      const newsContent = await generatePreventionNewsClient("水分補給・熱中症予防・室温管理");
+      console.log("生成された予防ニュース:", newsContent);
+
+      const now = new Date().toISOString();
+
+      // Firestore の news コレクションに保存！
+      await saveNews({
+        deliveredTo: elderlyUser.id,
+        type: "prevention",
+        title: newsContent.title,
+        message: newsContent.message,
+        mediaUrl: "",
+        isRead: false,
+        isAiGeneratedImage: false,
+        createdAt: now,
+      });
+
+      // 家族側にも完了通知を表示
+      sendLocalNotification(
+        "🎉 予防ニュースを届けました！",
+        `見出し: 「${newsContent.title}」をおじいちゃん・おばあちゃんへ届けました`
+      );
+
+      Alert.alert(
+        "予防ニュースを届けました！",
+        `見出し: 「${newsContent.title}」\n${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに予防ニュースを配信しました！`
+      );
+
+      fetchHistory();
+    } catch (error) {
+      console.error("予防ニュース送信エラー:", error);
+      Alert.alert("エラー", "予防ニュースの送信に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
   }; 
 
   // --------------------------------------------------
@@ -301,6 +427,37 @@ export default function FamilyHomeScreen() {
         setInviting(false);
       }
     };
+
+  const handleResetNews = () => {
+    Alert.alert(
+      "ニュースの削除",
+      "送信済みのニュースデータをすべて削除しますか？\n（おじいちゃん・おばあちゃん側も未読状態に戻ります）",
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "削除する",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const newsSnapshot = await getDocs(collection(db, "news"));
+              const deletePromises = newsSnapshot.docs.map((d) =>
+                deleteDoc(doc(db, "news", d.id))
+              );
+              await Promise.all(deletePromises);
+              setHistory([]);
+              Alert.alert("削除完了", "ニュースデータをすべて削除しました。");
+            } catch (err) {
+              console.error("ニュース削除エラー:", err);
+              Alert.alert("エラー", "ニュースの削除に失敗しました。");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
  
   const renderItem = ({ 
     item, 
@@ -359,7 +516,7 @@ export default function FamilyHomeScreen() {
  
       {elderlyUser && ( 
         <Text style={styles.targetText}> 
-          {elderlyUser.name}さんへのNEWS 
+          {elderlyUser.name}さんへのニュース 
         </Text> 
       )} 
 
@@ -403,6 +560,30 @@ export default function FamilyHomeScreen() {
         >
           招待リンクを作成して、高齢者の方へ送ることができます。
         </Text>
+
+        {/* 予防ニュース配信ボタン（デモ用） */}
+        <TouchableOpacity
+          style={styles.preventionButton}
+          onPress={handleSendPreventionNews}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.preventionButtonText}>
+            🌤️【デモ用】予防ニュースを届ける（AI生成）
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.demoNote}>
+          ※本番は毎朝AIが自動配信しますが、デモ用に今すぐ配信できます
+        </Text>
+
+        {/* デモ用ニュース削除ボタン */}
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={handleResetNews}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.resetButtonText}>🗑️ 送信履歴を全削除（デモ用リセット）</Text>
+        </TouchableOpacity>
       </View>
  
       {loading ? ( 
@@ -423,9 +604,9 @@ export default function FamilyHomeScreen() {
           showsVerticalScrollIndicator={false} 
           ListEmptyComponent={ 
             <Text style={styles.emptyText}> 
-              まだNEWSを送っていません。 
+              まだニュースを送っていません。 
               {"\n"} 
-              最初のNEWSを送ってみましょう！ 
+              最初のニュースを送ってみましょう！ 
             </Text> 
           } 
         /> 
@@ -510,6 +691,44 @@ const styles = StyleSheet.create({
 
   buttonDisabled: {
     opacity: 0.6,
+  },
+
+  preventionButton: {
+    marginTop: 12,
+    backgroundColor: "#0284C7",
+    borderRadius: 12,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+  },
+
+  preventionButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+
+  demoNote: {
+    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+
+  resetButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+    alignSelf: "center",
+  },
+
+  resetButtonText: {
+    fontSize: 13,
+    color: "#DC2626",
+    fontWeight: "600",
   },
  
   listContent: { 

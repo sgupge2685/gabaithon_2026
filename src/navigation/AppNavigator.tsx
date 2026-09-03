@@ -4,7 +4,10 @@ import React, {
 
 import {
   NavigationContainer,
+  createNavigationContainerRef,
 } from "@react-navigation/native";
+
+import { setupNotificationResponseListener } from "../services/notificationService";
 
 import {
   createNativeStackNavigator,
@@ -44,6 +47,9 @@ export type RootStackParamList = {
 
 const Stack =
   createNativeStackNavigator<RootStackParamList>();
+
+export const navigationRef =
+  createNavigationContainerRef<RootStackParamList>();
 
 // ============================================================
 // Deep Link設定
@@ -137,10 +143,24 @@ export default function AppNavigator() {
         }
       }
     );
+
+    // 通知バナーをタップした時の画面遷移リスナー
+    const unsubscribeNotification = setupNotificationResponseListener(
+      (screen, params) => {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate(screen as any, params);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribeNotification();
+    };
   }, []);
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       linking={linking}
     >
       <Stack.Navigator

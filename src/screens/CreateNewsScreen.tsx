@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import * as ImagePicker from "expo-image-picker";
 
-import { getAuth } from "firebase/auth";
+import { getAuth } from "@react-native-firebase/auth";
 import {
   getFirestore,
   doc,
@@ -26,7 +26,7 @@ import {
   where,
   limit,
   getDocs,
-} from "firebase/firestore";
+} from "@react-native-firebase/firestore";
 
 import {
   getStorage,
@@ -37,11 +37,17 @@ import {
 
 import app from "../firebase/firebaseConfig";
 import { COLORS } from "../constants/colors";
-import { saveMedia, saveNews } from "../firebase/firestore";
+import { saveMedia, saveMediaWithId, saveNews } from "../firebase/firestore";
 import type { User } from "../types/User";
+import { getAppCurrentUser } from "../features/auth/authFunctions";
+import {
+  generatePhotoTagsClient,
+  generateNewsContentClient,
+} from "../services/clientAiService";
+import { sendLocalNotification } from "../services/notificationService";
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+const auth = getAuth();
+const db = getFirestore();
 const storage = getStorage(app);
 
 export default function CreateNewsScreen({ navigation }: any) {
@@ -60,7 +66,7 @@ export default function CreateNewsScreen({ navigation }: any) {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const firebaseUser = auth.currentUser;
+        const firebaseUser = getAppCurrentUser();
 
         if (!firebaseUser) {
           Alert.alert("エラー", "ログイン中のユーザーが見つかりません。");
@@ -89,29 +95,53 @@ export default function CreateNewsScreen({ navigation }: any) {
           return;
         }
 
-        if (!myUser.familyGroupId) {
-          Alert.alert(
-            "家族未接続",
-            "先に高齢者の方と接続してください。",
-            [{ text: "OK", onPress: () => navigation.goBack() }]
-          );
-          return;
-        }
-
         const usersRef = collection(db, "users");
-        const elderlyQuery = query(
+        let elderlySnapshot: any = null;
+
+        // 1. 新方式: 高齢者側に familyUid として家族のUIDが保存されている
+        const elderlyQueryByFamilyUid = query(
           usersRef,
-          where("familyGroupId", "==", myUser.familyGroupId),
+          where("familyUid", "==", firebaseUser.uid),
           where("role", "==", "elderly"),
           limit(1)
         );
+        elderlySnapshot = await getDocs(elderlyQueryByFamilyUid);
 
-        const elderlySnapshot = await getDocs(elderlyQuery);
+        // 2. 旧方式: familyGroupId での検索
+        if ((!elderlySnapshot || elderlySnapshot.empty) && myUser.familyGroupId) {
+          const elderlyQueryByGroupId = query(
+            usersRef,
+            where("familyGroupId", "==", myUser.familyGroupId),
+            where("role", "==", "elderly"),
+            limit(1)
+          );
+          elderlySnapshot = await getDocs(elderlyQueryByGroupId);
+        }
 
-        if (elderlySnapshot.empty) {
+        // 3. 接続履歴 (familyConnections) から探す
+        if (!elderlySnapshot || elderlySnapshot.empty) {
+          const connectionsRef = collection(db, "familyConnections");
+          const connQuery = query(
+            connectionsRef,
+            where("familyUid", "==", firebaseUser.uid),
+            limit(1)
+          );
+          const connSnapshot = await getDocs(connQuery);
+          if (!connSnapshot.empty) {
+            const elderlyUid = connSnapshot.docs[0].data().elderlyUid;
+            if (elderlyUid) {
+              const elderlyDoc = await getDoc(doc(db, "users", elderlyUid));
+              if (elderlyDoc.exists()) {
+                elderlySnapshot = { empty: false, docs: [elderlyDoc] };
+              }
+            }
+          }
+        }
+
+        if (!elderlySnapshot || elderlySnapshot.empty) {
           Alert.alert(
-            "高齢者が見つかりません",
-            "接続先の高齢者が見つかりません。接続コードを再度確認してください。",
+            "家族未接続",
+            "先に高齢者の方と接続してください。",
             [{ text: "OK", onPress: () => navigation.goBack() }]
           );
           return;
@@ -168,7 +198,7 @@ export default function CreateNewsScreen({ navigation }: any) {
   // --------------------------------------------------
   // 画像をStorageへアップロード
   // --------------------------------------------------
-  const uploadImage = async (): Promise<string> => {
+  const uploadImage = async (customFileName?: string): Promise<string> => {
     if (!imageUri) return "";
 
     const blob: Blob = await new Promise((resolve, reject) => {
@@ -180,9 +210,9 @@ export default function CreateNewsScreen({ navigation }: any) {
       xhr.send(null);
     });
 
-    const fileName = `news/${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 8)}.jpg`;
+    const fileName =
+      customFileName ||
+      `news/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.jpg`;
 
     const imageRef = ref(storage, fileName);
 
@@ -216,39 +246,58 @@ export default function CreateNewsScreen({ navigation }: any) {
     try {
       setSending(true);
 
-      const mediaUrl = await uploadImage();
+      // ① 共通の mediaId を発行
+      const mediaId = `media_${Date.now()}`;
+      const fileName = `news/${mediaId}.jpg`;
 
-      const finalMessage = caption.trim()
-        ? caption.trim()
-        : "家族から元気な写真が届きました！今日も良い一日になりますように。";
+      // ② Storage へ画像をアップロード
+      const mediaUrl = await uploadImage(fileName);
+
+      // ③ Gemini AI で写真のタグを自動生成（AI①）
+      console.log("Gemini AI による写真タグ付けを開始...");
+      const tags = await generatePhotoTagsClient(imageUri);
+      console.log("生成されたタグ:", tags);
+
+      // ④ Gemini AI でおばあちゃん向けニュース見出し＆本文を自動生成（AI②）
+      console.log("Gemini AI によるニュース生成を開始...");
+      const newsContent = await generateNewsContentClient(tags, caption);
+      console.log("生成されたニュース:", newsContent);
 
       const now = new Date().toISOString();
 
-      await saveMedia({
+      // ⑤ Firestore の media コレクションに AIタグ付きで保存！
+      await saveMediaWithId(mediaId, {
         url: mediaUrl,
         uploadedBy: currentUser.id,
         createdAt: now,
         type: "image",
-        tags: ["family"],
+        tags: tags,
         deliveryCount: 1,
         takenAt: now,
         caption: caption.trim(),
       });
 
+      // ⑥ Firestore の news コレクションに AI見出し＆記事を保存しておばあちゃんへ配信！
       await saveNews({
         deliveredTo: elderlyUser.id,
         type: "family",
-        title: "今日の家族ニュース",
-        message: finalMessage,
+        title: newsContent.title,
+        message: newsContent.message,
         mediaUrl: mediaUrl,
         isRead: false,
         isAiGeneratedImage: false,
         createdAt: now,
       });
 
+      // 送信完了のプッシュ通知バナーを表示
+      sendLocalNotification(
+        "🎉 ニュースを届けました！",
+        `見出し: 「${newsContent.title}」`
+      );
+
       Alert.alert(
-        "送信しました！",
-        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんにニュースを届けました。`,
+        "ニュースを届けました！",
+        `見出し: 「${newsContent.title}」\n${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんに無事届きました！`,
         [
           {
             text: "OK",
@@ -343,9 +392,12 @@ export default function CreateNewsScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             {sending ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="small" color={COLORS.white} style={{ marginRight: 8 }} />
+                <Text style={styles.sendButtonText}>AIがニュースを作成中...</Text>
+              </View>
             ) : (
-              <Text style={styles.sendButtonText}>ニュースを送る</Text>
+              <Text style={styles.sendButtonText}>ニュースを届ける</Text>
             )}
           </TouchableOpacity>
         </ScrollView>
