@@ -37,6 +37,9 @@ npm install
 # 4. 開発サーバーを起動（トンネルモード推奨）
 npx expo start --tunnel
 
+# 4. iOSシュミレータ起動の場合（Macのみ）
+npx expo start --go --offline --ios
+
 # 5. iPhoneのカメラでQRコードを読み取る
 ```
 
