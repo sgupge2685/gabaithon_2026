@@ -18,6 +18,7 @@ import { SafeAreaView as SafeAreaViewContext } from "react-native-safe-area-cont
 import {
   getAuth,
 } from "@react-native-firebase/auth";
+import { auth as webAuth } from "../firebase/firebaseAuth";
 
 import {
   acceptFamilyInvitation,
@@ -84,7 +85,7 @@ export default function AddFamilyScreen({
       }
 
       const firebaseUser =
-        auth.currentUser;
+        auth.currentUser ?? webAuth.currentUser;
 
       if (!firebaseUser) {
         Alert.alert(
