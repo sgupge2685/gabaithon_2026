@@ -217,19 +217,16 @@ const weather = await getWeatherData('佐賀市');
 ```
 
 ### ⑤ AI③ 予防NEWS生成AI（高齢者向け予防アドバイスの作成時に使用）
-気象データ（`Weather`）を渡すと、今日予防情報を出すべきか自動判断し、危険・変化がある場合は高齢者向けの「タイトル」と「予防アドバイス本文」を生成して返します（平穏な日は `null` を返します）。
+高齢者ユーザー（`User`）と過去のNEWSリスト（`News[]`）を渡すと、`user.location` から天気を自動取得し、今日まだ伝えていない新しい危険がある場合のみ「タイトル」と「本文」を返します（平穏時や、本日すでに配信済みの重複時は `null` を返します）。
+※天気データをDBに保存する必要はありません。
+
 ```typescript
 import { generatePreventionNews } from './src/services/preventionNewsService';
 
-// 天気データを渡すだけで、判断＋生成が一連の流れで自動実行されます
-const preventionNews = await generatePreventionNews(weather);
-
-if (preventionNews) {
-  // preventionNews.title   ➔ 「熱中症に気をつけて！」（見出し）
-  // preventionNews.message ➔ 「今日は35℃の猛暑日です...（AIによる自動生成）」
-} else {
-  // 平穏な気象条件のため配信スキップ（家族写真NEWSのみ表示）
-}
+// 高齢者ユーザーと過去NEWSを渡すだけ！（天気の取得〜重複防止まで全自動）
+const preventionNews = await generatePreventionNews(elderlyUser, pastNewsList);
+// ➔ { title: "熱中症に気をつけて！", message: "今日は35℃の猛暑日です...（AIによる自動生成）" }
+// ※不要時や本日配信済みの場合は null が返ります
 ```
 
 ---
