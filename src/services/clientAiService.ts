@@ -6,6 +6,7 @@
 
 import type { Media } from "../types/Media";
 import type { Weather } from "../types/Weather";
+import type { News } from "../types/News";
 
 const GEMINI_API_KEY =
   process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
@@ -295,6 +296,83 @@ export interface PreventionNewsResultClient {
 }
 
 /**
+ * 気象条件から、今日まだ配信されていない「注意すべきキーワード群」を抽出する
+ * （今日の過去ニュースのタイトル＋メッセージを結合したテキストを検索し、重複を検知）
+ */
+export function getPendingPreventionKeywords(
+  weather: Weather | null | undefined,
+  pastNewsList: News[] = []
+): string[] {
+  if (!weather) return [];
+
+  const today = weather.date || new Date().toISOString().split("T")[0];
+
+  // 今日の予防ニュースの「見出し」と「本文」をすべて結合して重複チェック用テキストを作成
+  const todayDeliveredText = pastNewsList
+    .filter((news) => news.type === "prevention" && news.createdAt.startsWith(today))
+    .map((news) => `${news.title} ${news.message}`)
+    .join(" ");
+
+  const pendingKeywords: string[] = [];
+
+  // 1. 気象庁の公式警報・注意報
+  if (weather.warnings && weather.warnings.length > 0) {
+    for (const warningName of weather.warnings) {
+      if (!todayDeliveredText.includes(warningName)) {
+        pendingKeywords.push(warningName);
+      }
+    }
+  }
+
+  // 2. 猛暑・熱中症リスク
+  const isHeatDanger = weather.temperatureMax >= 31 || (weather.temperatureMax >= 28 && weather.humidityDaytime >= 70);
+  if (isHeatDanger) {
+    if (!todayDeliveredText.includes("熱中症") && !todayDeliveredText.includes("猛暑")) {
+      pendingKeywords.push("熱中症");
+    }
+  }
+
+  // 3. 冬の冷え込みリスク
+  if (weather.temperatureMin <= 5) {
+    if (!todayDeliveredText.includes("寒い") && !todayDeliveredText.includes("冷え込み")) {
+      pendingKeywords.push("冷え込み");
+    }
+  }
+
+  // 4. 寒暖差リスク
+  if (weather.temperatureMax - weather.temperatureMin >= 10) {
+    if (!todayDeliveredText.includes("寒暖差")) {
+      pendingKeywords.push("寒暖差");
+    }
+  }
+
+  // 5. 雨や雪によるスリップ・転倒リスク
+  const isRainOrSnow = weather.rainProbability >= 50 || weather.weatherText.includes("雨") || weather.weatherText.includes("雪");
+  if (isRainOrSnow) {
+    const word = weather.weatherText.includes("雪") ? "雪" : "雨";
+    if (!todayDeliveredText.includes("雨") && !todayDeliveredText.includes("雪")) {
+      pendingKeywords.push(word);
+    }
+  }
+
+  // 6. 強風リスク
+  if (weather.windSpeed >= 8) {
+    if (!todayDeliveredText.includes("強風") && !todayDeliveredText.includes("風が強い")) {
+      pendingKeywords.push("強風");
+    }
+  }
+
+  // 7. 紫外線
+  if (weather.uvIndex >= 8) {
+    if (!todayDeliveredText.includes("紫外線")) {
+      pendingKeywords.push("紫外線");
+    }
+  }
+
+  return pendingKeywords;
+}
+
+/**
  * 気象データから本日の予防テーマを自動判定する
  */
 export function determinePreventionTheme(weather?: Weather | null): string {
@@ -336,13 +414,14 @@ export function determinePreventionTheme(weather?: Weather | null): string {
 export async function generatePreventionNewsWithPhotoSelection(
   familyPhotos: Media[] = [],
   weatherOrTheme?: Weather | string | null,
-  locationName: string = "佐賀市"
+  locationName: string = "佐賀市",
+  targetKeyword?: string
 ): Promise<PreventionNewsResultClient> {
   const isWeatherObj = weatherOrTheme && typeof weatherOrTheme === "object";
   const weather = isWeatherObj ? (weatherOrTheme as Weather) : null;
-  const theme = typeof weatherOrTheme === "string"
+  const theme = targetKeyword || (typeof weatherOrTheme === "string"
     ? weatherOrTheme
-    : determinePreventionTheme(weather);
+    : determinePreventionTheme(weather));
 
   const weatherDetailText = weather
     ? `地域: ${weather.locationName || locationName}, 天気: ${weather.weatherText}, 気温: 最高${weather.temperatureMax}℃/最低${weather.temperatureMin}℃, 降水確率: ${weather.rainProbability}%`
@@ -380,6 +459,9 @@ ${photosText}
    - 80〜120文字程度で、優しく寄り添う敬語にしてください。
    - **写真を選んだ場合**: その家族写真の思い出に必ず触れつつ、予防アドバイスに繋げてください。
    - **写真がない場合 ("none")**: 写真には一切触れず、気象状況に基づいた温かい予防アドバイスを作成してください。
+
+5. **★最重要ルール（重複防止）★**:
+   - 1日に何度も同じテーマのニュースが配信されるのを防ぐため、**必ず見出し(title)または本文(message)の中にキーワード「${theme}」という言葉を含めてください**。
 
 JSON形式で以下のキーのみを出力してください:
 {

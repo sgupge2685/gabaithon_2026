@@ -49,6 +49,7 @@ import {
 import {
   generatePreventionNewsClient,
   generatePreventionNewsWithPhotoSelection,
+  getPendingPreventionKeywords,
 } from "../services/clientAiService";
 import { getWeatherData } from "../services/weatherService";
  
@@ -377,12 +378,34 @@ export default function FamilyHomeScreen() {
         console.warn("気象データ取得失敗（デフォルト値で継続）:", weatherErr);
       }
 
-      // 3. 写真選定 ➡️ 予防ニュース生成を一撃実行！
+      // 3. 過去のニュース履歴を取得し、今日すでに配信した注意キーワードがあるかチェック
+      console.log("重複配信チェックを開始...");
+      const allNews = await getNews();
+      const myElderlyNews = allNews.filter((n) => n.deliveredTo === elderlyUser.id);
+      const pendingKeywords = getPendingPreventionKeywords(weather, myElderlyNews);
+
+      console.log("今日未配信の予防キーワード:", pendingKeywords);
+
+      // ★ すでに今日同じキーワードのニュースを発信済みの場合は発信しない！
+      if (pendingKeywords.length === 0) {
+        console.log("本日すでに同じ注意喚起を配信済みのためスキップ");
+        Alert.alert(
+          "配信スキップ（重複防止）",
+          "本日の気象注意（予防ニュース）はすでに配信済みです。\n1日に同じ注意喚起が何度も届かないよう自動で発信を停止しました。"
+        );
+        return;
+      }
+
+      const primaryKeyword = pendingKeywords[0];
+      console.log(`今回発信する予防キーワード: 【${primaryKeyword}】`);
+
+      // 4. 写真選定 ➡️ 予防ニュース生成を一撃実行！
       console.log("Gemini AI による写真選定＆予防ニュース生成を開始...");
       const result = await generatePreventionNewsWithPhotoSelection(
         familyPhotos,
         weather,
-        locationName
+        locationName,
+        primaryKeyword
       );
       console.log("生成された予防ニュース結果:", result);
 
