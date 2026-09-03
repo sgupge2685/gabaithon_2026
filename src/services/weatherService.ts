@@ -153,7 +153,7 @@ export async function getWeatherData(cityName: string = '佐賀市'): Promise<We
     // ==================================================
     const today = new Date().toISOString().split('T')[0];
 
-    return {
+    const weatherResult: Weather = {
       locationName: resolvedCityName,                     // 正式地名（例: "佐賀市"）
       date: today,                                        // 今日の日付（例: "2026-08-31"）
       weatherText: weatherText.replace(/\s+/g, ' ').trim(), // 天気（余計な改行や空白を除去）
@@ -164,8 +164,14 @@ export async function getWeatherData(cityName: string = '佐賀市'): Promise<We
       rainProbability: rainProbability,                   // 降水確率（%）
       uvIndex: uvIndex,                                   // 紫外線指数
       windSpeed: windSpeed,                               // 風速（m/s）
-      warnings: warnings.length > 0 ? warnings : undefined // 発令中の気象庁公式警報（なければundefined）
     };
+
+    // 警報・注意報が発令されている場合のみ、warnings プロパティを追加（ない日はキー自体を含めない）
+    if (warnings.length > 0) {
+      weatherResult.warnings = warnings;
+    }
+
+    return weatherResult;
 
   } catch (error) {
     console.error('気象データ取得エラー:', error);

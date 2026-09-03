@@ -10,7 +10,10 @@
     "test:photoSelect": "npx tsx tests/testSelectPhotos.ts",
     "test:tagging": "npx tsx --env-file=.env tests/testTagging.ts",
     "test:news": "npx tsx --env-file=.env tests/testNewsGenerate.ts",
-    "test:weather": "npx tsx tests/testWeather.ts"
+    "test:weather": "npx tsx tests/testWeather.ts",
+    "test:prevention": "npx tsx --env-file=.env tests/testPreventionNews.ts",
+    "test:photoMatch": "npx tsx --env-file=.env tests/testPreventionPhotoSelect.ts",
+    "test:image": "npx tsx --env-file=.env tests/testImageGenerate.ts"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",
