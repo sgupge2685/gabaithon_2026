@@ -60,7 +60,8 @@ gabaithon_2026/
 │  ├─ testSelectPhotos.ts    ← AI① 写真選択AIの単体テスト
 │  ├─ testTagging.ts         ← 写真自動タグ付けAIのテスト
 │  ├─ testNewsGenerate.ts    ← AI② NEWS生成AIの単体テスト
-│  └─ testWeather.ts         ← 気象データ取得（気象庁＋Open-Meteo）のテスト
+│  ├─ testWeather.ts         ← 気象データ取得（気象庁＋Open-Meteo）のテスト
+│  └─ testPreventionNews.ts  ← AI③ 予防NEWS生成AIの単体テスト
 │
 └─ src/
    │
@@ -80,7 +81,8 @@ gabaithon_2026/
    │  ├─ photoSelectService.ts      ← AI① 写真選択AI（毎日のNEWS用）
    │  ├─ taggingService.ts          ← 写真自動タグ付けAI（アップロード時）
    │  ├─ newsGenerateService.ts     ← AI② NEWS生成AI（紹介文作成）
-   │  └─ weatherService.ts          ← 気象データ取得（気象庁公式＋Open-Meteo）
+   │  ├─ weatherService.ts          ← 気象データ取得（気象庁公式＋Open-Meteo）
+   │  └─ preventionNewsService.ts   ← AI③ 予防NEWS生成AI（健康・安全アドバイス）
    │
    ├─ types/         ← 3人で共有：データの型を定義など
    │  ├─ News.ts             ← NEWSデータの形式
@@ -214,6 +216,22 @@ const weather = await getWeatherData('佐賀市');
 // weather.warnings        ➔ ['雷注意報', '乾燥注意報']（市区町村別の公式警報）
 ```
 
+### ⑤ AI③ 予防NEWS生成AI（高齢者向け予防アドバイスの作成時に使用）
+気象データ（`Weather`）を渡すと、今日予防情報を出すべきか自動判断し、危険・変化がある場合は高齢者向けの「タイトル」と「予防アドバイス本文」を生成して返します（平穏な日は `null` を返します）。
+```typescript
+import { generatePreventionNews } from './src/services/preventionNewsService';
+
+// 天気データを渡すだけで、判断＋生成が一連の流れで自動実行されます
+const preventionNews = await generatePreventionNews(weather);
+
+if (preventionNews) {
+  // preventionNews.title   ➔ 「熱中症に気をつけて！」（見出し）
+  // preventionNews.message ➔ 「今日は35℃の猛暑日です...（AIによる自動生成）」
+} else {
+  // 平穏な気象条件のため配信スキップ（家族写真NEWSのみ表示）
+}
+```
+
 ---
 
 ## テストの実行方法
@@ -232,6 +250,9 @@ npm run test:news
 
 # 気象データ取得（weatherService）の動作テスト
 npm run test:weather
+
+# AI③ 予防NEWS生成AI（preventionNewsService）の動作テスト
+npm run test:prevention
 ```
 
 ---
@@ -253,6 +274,7 @@ npm run test:weather
 - ✅ **写真自動タグ付けAI (`taggingService.ts`)**: 基本タグ優先＋具体物追加＋抽象タグ排除＋全画像形式対応
 - ✅ **AI② NEWS生成AI (`newsGenerateService.ts`)**: 家族コメント最優先＋タグからの自動生成＋注釈付与
 - ✅ **気象データ取得サービス (`weatherService.ts`)**: 気象庁公式（天気・気温・警報）＋Open-Meteo（湿度・UV・風速）連携
+- ✅ **AI③ 予防NEWS生成AI (`preventionNewsService.ts`)**: 気象状況の自動判断＋高齢者向け健康安全アドバイス生成
 
 ### 今後の検討事項
 - 写真選択時の「重要度（お気に入り）」および「画面での見やすさ」の判定については現在未実装（どのようにデータを付与・判定するか今後検討）。
