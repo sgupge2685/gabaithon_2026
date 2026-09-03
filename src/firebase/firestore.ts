@@ -5,6 +5,7 @@ import {
   getDocs,
   doc,
   updateDoc,
+  setDoc,
 } from "firebase/firestore";
 
 import app from "./firebaseConfig";
@@ -30,6 +31,20 @@ export const saveMedia = async (
     return mediaRef.id;
   } catch (error) {
     console.error("Firestoreへの保存失敗:", error);
+    throw error;
+  }
+};
+
+export const saveMediaWithId = async (
+  mediaId: string,
+  media: Omit<Media, "id">
+): Promise<void> => {
+  try {
+    const mediaRef = doc(db, "media", mediaId);
+    await setDoc(mediaRef, media);
+    console.log("FirestoreへのMedia保存成功:", mediaId);
+  } catch (error) {
+    console.error("FirestoreへのMedia保存失敗:", error);
     throw error;
   }
 };
