@@ -1,12 +1,14 @@
-import { signOut as signOutWeb } from "firebase/auth";
-import { getAuth as getNativeAuth, signOut as signOutNative } from "@react-native-firebase/auth";
 import {
+  getAuth,
+  signOut,
+} from "@react-native-firebase/auth";
+
+import {
+  getFirestore,
   doc,
   setDoc,
   serverTimestamp,
-} from "firebase/firestore";
-import { auth as webAuth } from "../../firebase/firebaseAuth";
-import db from "../../firebase/firestore";
+} from "@react-native-firebase/firestore";
 
 // ============================================================
 // ユーザー情報
@@ -17,27 +19,6 @@ export type UserRole =
   | "elderly";
 
 // ============================================================
-// 現在のユーザー取得（Native/Web両対応）
-// ============================================================
-
-export const getAppCurrentUser = () => {
-  try {
-    const nativeAuth = getNativeAuth();
-    if (nativeAuth?.currentUser) {
-      return nativeAuth.currentUser;
-    }
-  } catch (e) {}
-
-  try {
-    if (webAuth?.currentUser) {
-      return webAuth.currentUser;
-    }
-  } catch (e) {}
-
-  return null;
-};
-
-// ============================================================
 // Firestoreへユーザー情報を保存
 // ============================================================
 
@@ -46,13 +27,23 @@ export const getAppCurrentUser = () => {
  * Firestore users/{uid} に保存する
  *
  * @param role ユーザーの役割
- * @param explicitUser ログイン直後に取得したUserオブジェクト（任意）
+ * @param passedUser 認証成功時に取得したユーザー情報
  */
 export const saveUserProfile = async (
   role: UserRole,
-  explicitUser?: any
+  passedUser?: {
+    uid: string;
+    phoneNumber?: string | null;
+  }
 ): Promise<void> => {
-  const user = explicitUser ?? getAppCurrentUser();
+  const auth =
+    getAuth();
+
+  const db =
+    getFirestore();
+
+  const user =
+    passedUser ?? auth.currentUser;
 
   if (!user) {
     throw new Error(
@@ -103,8 +94,19 @@ export const saveUserProfile = async (
  * 現在ログインしているFirebaseユーザーを取得する
  */
 export const getCurrentUser = () => {
-  return getAppCurrentUser();
+  const auth =
+    getAuth();
+
+  return auth.currentUser;
 };
+
+/**
+ * 現在ログインしているFirebaseユーザーを取得する
+ *
+ * 既存画面との互換性のために用意
+ */
+export const getAppCurrentUser =
+  getCurrentUser;
 
 // ============================================================
 // ログイン状態確認
@@ -114,7 +116,10 @@ export const getCurrentUser = () => {
  * 現在ログインしているか確認する
  */
 export const isLoggedIn = (): boolean => {
-  return getAppCurrentUser() !== null;
+  const auth =
+    getAuth();
+
+  return auth.currentUser !== null;
 };
 
 // ============================================================
@@ -126,12 +131,12 @@ export const isLoggedIn = (): boolean => {
  */
 export const logout = async (): Promise<void> => {
   try {
-    try {
-      await signOutNative(getNativeAuth());
-    } catch (e) {}
-    try {
-      await signOutWeb(webAuth);
-    } catch (e) {}
+    const auth =
+      getAuth();
+
+    await signOut(
+      auth
+    );
 
     console.log(
       "ログアウトしました"
