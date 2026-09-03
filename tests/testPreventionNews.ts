@@ -1,118 +1,139 @@
-import { generatePreventionNews } from '../src/services/preventionNewsService';
+import { 
+  generatePreventionNews, 
+  shouldDeliverPreventionNews, 
+  getPendingPreventionKeywords 
+} from '../src/services/preventionNewsService';
 import { getWeatherData } from '../src/services/weatherService';
+import { User } from '../src/types/User';
+import { News } from '../src/types/News';
 import { Weather } from '../src/types/Weather';
+
+/**
+ * Weather 型のデータを綺麗に出力するヘルパー関数
+ */
+function printWeatherData(weather: Weather) {
+  console.log('  [気象データ (Weather 型)]:');
+  console.log(`    ・地域名      : ${weather.locationName}`);
+  console.log(`    ・日付        : ${weather.date}`);
+  console.log(`    ・天気        : ${weather.weatherText}`);
+  console.log(`    ・気温        : 最高 ${weather.temperatureMax}℃ / 最低 ${weather.temperatureMin}℃`);
+  console.log(`    ・湿度        : 昼 ${weather.humidityDaytime}% / 夜 ${weather.humidityNight}%`);
+  console.log(`    ・降水確率    : ${weather.rainProbability}%`);
+  console.log(`    ・紫外線(UV)  : ${weather.uvIndex}`);
+  console.log(`    ・風速        : ${weather.windSpeed} m/s`);
+  console.log(`    ・発令中の警報: ${weather.warnings && weather.warnings.length > 0 ? weather.warnings.join(', ') : 'なし（平常）'}`);
+}
 
 async function runTest() {
   console.log('========================================');
-  console.log('[テスト開始] 予防NEWS生成AI (preventionNewsService)');
+  console.log('[テスト開始] 予防NEWS自動判定・生成パイプライン');
   console.log('========================================\n');
 
-  // --------------------------------------------------
-  // ケース1：平穏で過ごしやすい日（不要 ➔ null）
-  // --------------------------------------------------
-  console.log('--- ケース1: 完全に平穏で過ごしやすい日 ---');
-  const calmWeather: Weather = {
-    locationName: '佐賀市',
-    date: '2026-05-15',
-    weatherText: '晴れ',
-    temperatureMax: 22,
-    temperatureMin: 15,
-    humidityDaytime: 50,
-    humidityNight: 60,
-    rainProbability: 10,
-    uvIndex: 4,
-    windSpeed: 2,
-    warnings: undefined,
+  const elderlyUser: User = {
+    id: 'user_grandpa_001',
+    name: 'おじいちゃん',
+    role: 'elderly',
+    familyGroupId: 'family_group_001',
+    location: '佐賀市',
+    notificationEnabled: true,
   };
 
-  const result1 = await generatePreventionNews(calmWeather);
+  // --------------------------------------------------
+  // テスト1：平穏な日のテスト
+  // --------------------------------------------------
+  console.log('--- テスト1: 完全に平穏な日のテスト（存在しない地名） ---');
+  const calmResult = await generatePreventionNews('存在しない町名XYZ');
+  console.log(`[結果] 平穏/エラー時: ${calmResult === null ? 'null (正常にスキップ)' : calmResult.title}\n`);
+
+  // --------------------------------------------------
+  // テスト2：1回目の定期チェック（過去NEWSなし ➔ 初回配信）
+  // --------------------------------------------------
+  console.log('--- テスト2: 1回目の定期チェック（Userオブジェクトを渡す・過去NEWSなし） ---');
+  console.log(`[対象ユーザー] ${elderlyUser.name}（お住まい: ${elderlyUser.location}）`);
+  
+  const pastNewsList: News[] = [];
+
+  // 実況の天気を取得
+  const realWeather = await getWeatherData(elderlyUser.location);
+  if (realWeather) {
+    // Weather の全データを出力
+    printWeatherData(realWeather);
+  }
+
+  const reasons1 = realWeather ? getPendingPreventionKeywords(realWeather, pastNewsList) : [];
+  const result1 = await generatePreventionNews(elderlyUser, pastNewsList);
+
   if (result1) {
-    console.log(`[結果] NEWS生成あり`);
-    console.log(`  見出し: ${result1.title}`);
-    console.log(`  本文  : ${result1.message}\n`);
+    console.log('[結果] NEWS生成あり（注意喚起を発信）');
+    console.log(`  配信理由: 【${reasons1.join('・')}】への警戒が必要と判断`);
+    console.log(`  見出し  : ${result1.title}`);
+    console.log(`  本文    : ${result1.message}\n`);
+
+    pastNewsList.push({
+      id: 'news_001',
+      deliveredTo: elderlyUser.id,
+      type: 'prevention',
+      title: result1.title,
+      message: result1.message,
+      mediaUrl: 'https://example.com/dummy.jpg',
+      isRead: false,
+      isAiGeneratedImage: false,
+      createdAt: new Date().toISOString(),
+    });
   } else {
-    // 生成されない場合も「見出し」「本文」を表示
-    console.log(`[結果] NEWS生成なし（平穏なため配信スキップ）`);
+    console.log('[結果] NEWS生成なし（平穏な気象のため配信スキップ）');
     console.log(`  見出し: （なし）`);
-    console.log(`  本文  : （なし - 家族写真NEWSのみ表示）\n`);
+    console.log(`  本文  : （なし）\n`);
   }
 
   // --------------------------------------------------
-  // ケース2：35℃の猛暑日（必要 ➔ 生成）
+  // テスト3：2回目の定期チェック（同じ注意が継続中 ➔ 重複スキップ）
   // --------------------------------------------------
-  console.log('--- ケース2: 35℃の猛暑日 ---');
-  const hotWeather: Weather = {
-    locationName: '佐賀市',
-    date: '2026-08-05',
-    weatherText: '晴れ',
-    temperatureMax: 35,
-    temperatureMin: 26,
-    humidityDaytime: 75,
-    humidityNight: 85,
-    rainProbability: 0,
-    uvIndex: 9,
-    windSpeed: 3,
-    warnings: ['熱中症警戒アラート'],
-  };
+  console.log('--- テスト3: 2回目の定期チェック（15分後・同じ注意が継続中） ---');
+  console.log('[シミュレーション] 15分後に同じおじいちゃんの天気を再度チェック...');
 
-  const result2 = await generatePreventionNews(hotWeather);
+  const result2 = await generatePreventionNews(elderlyUser, pastNewsList);
+
   if (result2) {
-    console.log(`[結果] NEWS生成あり`);
+    console.log('[結果] NEWS生成あり');
     console.log(`  見出し: ${result2.title}`);
     console.log(`  本文  : ${result2.message}\n`);
   } else {
-    console.log(`[結果] NEWS生成なし（配信スキップ）`);
-    console.log(`  見出し: （なし）`);
-    console.log(`  本文  : （なし）\n`);
+    console.log('[結果] NEWS生成なし（重複防止が正常作動！本日すでに配信済みのためスキップ成功）');
+    console.log(`  判定理由: 直前に配信した【${reasons1.join('・')}】と同じ要因が継続しているため送信不要`);
+    console.log(`  見出し  : （なし）`);
+    console.log(`  本文    : （なし - 重複送信を防止しました）\n`);
   }
 
   // --------------------------------------------------
-  // ケース3：大雨警報の日（必要 ➔ 生成）
+  // テスト4：3回目の定期チェック（新しく大雨警報が追加されたシミュレーション）
   // --------------------------------------------------
-  console.log('--- ケース3: 大雨警報発令中の日 ---');
-  const rainyWeather: Weather = {
+  console.log('--- テスト4: 3回目の定期チェック（午後に新しく大雨警報が追加された場合） ---');
+  
+  const mockAlertWeather: Weather = {
     locationName: '佐賀市',
-    date: '2026-07-10',
+    date: new Date().toISOString().split('T')[0],
     weatherText: '大雨',
-    temperatureMax: 25,
+    temperatureMax: 28,
     temperatureMin: 22,
-    humidityDaytime: 90,
-    humidityNight: 95,
+    humidityDaytime: 85,
+    humidityNight: 90,
     rainProbability: 90,
-    uvIndex: 1,
-    windSpeed: 9,
-    warnings: ['大雨警報', '洪水警報'],
+    uvIndex: 2,
+    windSpeed: 8,
+    warnings: ['大雨警報'],
   };
 
-  const result3 = await generatePreventionNews(rainyWeather);
-  if (result3) {
-    console.log(`[結果] NEWS生成あり`);
-    console.log(`  見出し: ${result3.title}`);
-    console.log(`  本文  : ${result3.message}\n`);
-  } else {
-    console.log(`[結果] NEWS生成なし（配信スキップ）`);
-    console.log(`  見出し: （なし）`);
-    console.log(`  本文  : （なし）\n`);
-  }
+  // シミュレーション用の Weather データも出力
+  printWeatherData(mockAlertWeather);
 
-  // --------------------------------------------------
-  // ケース4：実際のリアルタイム天気（佐賀市）
-  // --------------------------------------------------
-  console.log('--- ケース4: 実際の佐賀市のリアルタイム気象データと連携 ---');
-  const realWeather = await getWeatherData('佐賀市');
-  if (realWeather) {
-    console.log(`[実況データ] ${realWeather.locationName}: 天気=${realWeather.weatherText}, 最高=${realWeather.temperatureMax}℃, 警報=${realWeather.warnings?.join('・') || 'なし'}`);
+  const newReasons = getPendingPreventionKeywords(mockAlertWeather, pastNewsList);
+  const hasNewAlert = shouldDeliverPreventionNews(mockAlertWeather, pastNewsList);
 
-    const resultReal = await generatePreventionNews(realWeather);
-    if (resultReal) {
-      console.log(`[結果] NEWS生成あり（実況から生成）`);
-      console.log(`  見出し: ${resultReal.title}`);
-      console.log(`  本文  : ${resultReal.message}\n`);
-    } else {
-      console.log(`[結果] NEWS生成なし（実況が平穏なため配信スキップ）`);
-      console.log(`  見出し: （なし）`);
-      console.log(`  本文  : （なし - 家族写真NEWSのみ表示）\n`);
-    }
+  console.log(`[判定結果] 新しい危険の検知フラグ: ${hasNewAlert ? 'true (新警報を検知！)' : 'false'}`);
+  if (hasNewAlert) {
+    console.log(`  新検知理由: 本日まだ配信していない新しい危険【${newReasons.join('・')}】を検知！`);
+    console.log('[結果] 新しい危険が追加されたため、本日2回目のNEWS配信が可能と判定されました！\n');
   }
 
   console.log('========================================');
