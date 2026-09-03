@@ -37,7 +37,10 @@ import {
 
 import app from "../firebase/firebaseConfig";
 import { COLORS } from "../constants/colors";
-import { saveMedia, saveNews } from "../firebase/firestore";
+import {
+  saveMediaWithId,
+  updateMedia,
+} from "../firebase/firestore";
 import type { User } from "../types/User";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
 
@@ -64,15 +67,27 @@ export default function CreateNewsScreen({ navigation }: any) {
         const firebaseUser = getAppCurrentUser();
 
         if (!firebaseUser) {
-          Alert.alert("エラー", "ログイン中のユーザーが見つかりません。");
+          Alert.alert(
+            "エラー",
+            "ログイン中のユーザーが見つかりません。"
+          );
           return;
         }
 
-        const myUserRef = doc(db, "users", firebaseUser.uid);
-        const myUserSnapshot = await getDoc(myUserRef);
+        const myUserRef = doc(
+          db,
+          "users",
+          firebaseUser.uid
+        );
+
+        const myUserSnapshot =
+          await getDoc(myUserRef);
 
         if (!myUserSnapshot.exists()) {
-          Alert.alert("エラー", "ユーザー情報が見つかりません。");
+          Alert.alert(
+            "エラー",
+            "ユーザー情報が見つかりません。"
+          );
           return;
         }
 
@@ -84,49 +99,169 @@ export default function CreateNewsScreen({ navigation }: any) {
         setCurrentUser(myUser);
 
         if (myUser.role !== "family") {
-          Alert.alert("エラー", "この画面は家族側のみ利用できます。", [
-            { text: "OK", onPress: () => navigation.goBack() },
-          ]);
+          Alert.alert(
+            "エラー",
+            "この画面は家族側のみ利用できます。",
+            [
+              {
+                text: "OK",
+                onPress: () =>
+                  navigation.goBack(),
+              },
+            ]
+          );
           return;
         }
+
+        // --------------------------------------------------
+        // 新しい家族連携方式
+        // familyConnectionsから接続先高齢者を取得
+        // --------------------------------------------------
+
+        const connectionsRef =
+          collection(
+            db,
+            "familyConnections"
+          );
+
+        const connectionQuery =
+          query(
+            connectionsRef,
+            where(
+              "familyUid",
+              "==",
+              firebaseUser.uid
+            ),
+            limit(1)
+          );
+
+        const connectionSnapshot =
+          await getDocs(
+            connectionQuery
+          );
+
+        if (
+          !connectionSnapshot.empty
+        ) {
+          const connectionData =
+            connectionSnapshot.docs[0].data();
+
+          const elderlyUid =
+            connectionData.elderlyUid;
+
+          if (elderlyUid) {
+            const elderlyUserRef =
+              doc(
+                db,
+                "users",
+                elderlyUid
+              );
+
+            const elderlyUserSnapshot =
+              await getDoc(
+                elderlyUserRef
+              );
+
+            if (
+              elderlyUserSnapshot.exists()
+            ) {
+              const elderlyData = {
+                id:
+                  elderlyUserSnapshot.id,
+                ...elderlyUserSnapshot.data(),
+              } as User;
+
+              setElderlyUser(
+                elderlyData
+              );
+
+              return;
+            }
+          }
+        }
+
+        // --------------------------------------------------
+        // 既存のfamilyGroupId方式との互換
+        // --------------------------------------------------
 
         if (!myUser.familyGroupId) {
           Alert.alert(
             "家族未接続",
             "先に高齢者の方と接続してください。",
-            [{ text: "OK", onPress: () => navigation.goBack() }]
+            [
+              {
+                text: "OK",
+                onPress: () =>
+                  navigation.goBack(),
+              },
+            ]
           );
           return;
         }
 
-        const usersRef = collection(db, "users");
-        const elderlyQuery = query(
-          usersRef,
-          where("familyGroupId", "==", myUser.familyGroupId),
-          where("role", "==", "elderly"),
-          limit(1)
-        );
+        const usersRef =
+          collection(
+            db,
+            "users"
+          );
 
-        const elderlySnapshot = await getDocs(elderlyQuery);
+        const elderlyQuery =
+          query(
+            usersRef,
+            where(
+              "familyGroupId",
+              "==",
+              myUser.familyGroupId
+            ),
+            where(
+              "role",
+              "==",
+              "elderly"
+            ),
+            limit(1)
+          );
 
-        if (elderlySnapshot.empty) {
+        const elderlySnapshot =
+          await getDocs(
+            elderlyQuery
+          );
+
+        if (
+          elderlySnapshot.empty
+        ) {
           Alert.alert(
             "高齢者が見つかりません",
-            "接続先の高齢者が見つかりません。接続コードを再度確認してください。",
-            [{ text: "OK", onPress: () => navigation.goBack() }]
+            "接続先の高齢者が見つかりません。接続情報を再度確認してください。",
+            [
+              {
+                text: "OK",
+                onPress: () =>
+                  navigation.goBack(),
+              },
+            ]
           );
           return;
         }
 
         const elderlyData = {
-          id: elderlySnapshot.docs[0].id,
+          id:
+            elderlySnapshot.docs[0].id,
           ...elderlySnapshot.docs[0].data(),
         } as User;
 
-        setElderlyUser(elderlyData);
+        setElderlyUser(
+          elderlyData
+        );
       } catch (error) {
-        console.error("ユーザー取得エラー:", error);
-        Alert.alert("エラー", "ユーザー情報を取得できませんでした。");
+        console.error(
+          "ユーザー取得エラー:",
+          error
+        );
+
+        Alert.alert(
+          "エラー",
+          "ユーザー情報を取得できませんでした。"
+        );
       } finally {
         setLoading(false);
       }
@@ -151,48 +286,111 @@ export default function CreateNewsScreen({ navigation }: any) {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes:
+            ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.8,
+        });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
+      if (
+        !result.canceled &&
+        result.assets &&
+        result.assets.length > 0
+      ) {
+        setImageUri(
+          result.assets[0].uri
+        );
       }
     } catch (error) {
-      console.error("写真選択エラー:", error);
-      Alert.alert("エラー", "写真を選択できませんでした。");
+      console.error(
+        "写真選択エラー:",
+        error
+      );
+
+      Alert.alert(
+        "エラー",
+        "写真を選択できませんでした。"
+      );
     }
+  };
+
+  // --------------------------------------------------
+  // Media ID生成
+  // Storageのファイル名とFirestoreのIDを統一する
+  // --------------------------------------------------
+  const generateMediaId = (): string => {
+    return `${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2, 8)}`;
   };
 
   // --------------------------------------------------
   // 画像をStorageへアップロード
   // --------------------------------------------------
-  const uploadImage = async (): Promise<string> => {
-    if (!imageUri) return "";
+  const uploadImage = async (
+    mediaId: string
+  ): Promise<string> => {
+    if (!imageUri) {
+      return "";
+    }
 
-    const blob: Blob = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = () => resolve(xhr.response);
-      xhr.onerror = () => reject(new TypeError("画像の読み込みに失敗しました"));
-      xhr.responseType = "blob";
-      xhr.open("GET", imageUri, true);
-      xhr.send(null);
-    });
+    const blob: Blob =
+      await new Promise(
+        (resolve, reject) => {
+          const xhr =
+            new XMLHttpRequest();
 
-    const fileName = `news/${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 8)}.jpg`;
+          xhr.onload = () =>
+            resolve(
+              xhr.response
+            );
 
-    const imageRef = ref(storage, fileName);
+          xhr.onerror = () =>
+            reject(
+              new TypeError(
+                "画像の読み込みに失敗しました"
+              )
+            );
 
-    await uploadBytes(imageRef, blob);
+          xhr.responseType =
+            "blob";
+
+          xhr.open(
+            "GET",
+            imageUri,
+            true
+          );
+
+          xhr.send(null);
+        }
+      );
+
+    // --------------------------------------------------
+    // Media IDをStorageのファイル名に使用
+    // --------------------------------------------------
+
+    const fileName =
+      `news/${mediaId}.jpg`;
+
+    const imageRef =
+      ref(
+        storage,
+        fileName
+      );
+
+    await uploadBytes(
+      imageRef,
+      blob
+    );
 
     // @ts-ignore
     blob.close?.();
 
-    return await getDownloadURL(imageRef);
+    return await getDownloadURL(
+      imageRef
+    );
   };
 
   // --------------------------------------------------
@@ -200,60 +398,116 @@ export default function CreateNewsScreen({ navigation }: any) {
   // --------------------------------------------------
   const handleSend = async () => {
     if (!currentUser) {
-      Alert.alert("エラー", "ユーザー情報がありません。");
+      Alert.alert(
+        "エラー",
+        "ユーザー情報がありません。"
+      );
       return;
     }
 
     if (!elderlyUser) {
-      Alert.alert("送信できません", "送信先の高齢者が見つかりません。");
+      Alert.alert(
+        "送信できません",
+        "送信先の高齢者が見つかりません。"
+      );
       return;
     }
 
     if (!imageUri) {
-      Alert.alert("写真を選択してください", "ニュースに載せる写真を選んでください。");
+      Alert.alert(
+        "写真を選択してください",
+        "ニュースに載せる写真を選んでください。"
+      );
       return;
     }
 
     try {
       setSending(true);
 
-      const mediaUrl = await uploadImage();
+      // --------------------------------------------------
+      // Media IDを先に生成
+      // --------------------------------------------------
 
-      const finalMessage = caption.trim()
-        ? caption.trim()
-        : "家族から元気な写真が届きました！今日も良い一日になりますように。";
+      const mediaId =
+        generateMediaId();
 
-      const now = new Date().toISOString();
+      const now =
+        new Date().toISOString();
 
-      await saveMedia({
-        url: mediaUrl,
-        uploadedBy: currentUser.id,
-        createdAt: now,
-        type: "image",
-        tags: ["family"],
-        deliveryCount: 1,
-        takenAt: now,
-        caption: caption.trim(),
-      });
+      // --------------------------------------------------
+      // Mediaを先にFirestoreへ保存
+      // タグ付けFunctionが更新するMediaを事前に作成する
+      // --------------------------------------------------
 
-      await saveNews({
-        deliveredTo: elderlyUser.id,
-        type: "family",
-        title: "今日の家族ニュース",
-        message: finalMessage,
-        mediaUrl: mediaUrl,
-        isRead: false,
-        isAiGeneratedImage: false,
-        createdAt: now,
-      });
+      await saveMediaWithId(
+        mediaId,
+        {
+          url: "",
+          uploadedBy:
+            currentUser.id,
+          createdAt: now,
+          type: "image",
+          tags: ["family"],
+          deliveryCount: 1,
+          takenAt: now,
+          caption:
+            caption.trim(),
+        }
+      );
+
+      console.log(
+        "Mediaの仮データをFirestoreに保存しました:",
+        mediaId
+      );
+
+      // --------------------------------------------------
+      // 画像をStorageへアップロード
+      // --------------------------------------------------
+
+      const mediaUrl =
+        await uploadImage(
+          mediaId
+        );
+
+      console.log(
+        "画像をStorageへアップロードしました:",
+        mediaId
+      );
+
+      // --------------------------------------------------
+      // MediaのURLをFirestoreへ保存
+      // --------------------------------------------------
+
+      await updateMedia(
+        mediaId,
+        {
+          url: mediaUrl,
+        }
+      );
+
+      console.log(
+        "MediaのURLをFirestoreに保存しました:",
+        mediaId
+      );
+
+      // --------------------------------------------------
+      // ここから先はCloud Functionsが自動処理
+      //
+      // 1. Storageへの画像アップロードを検知
+      // 2. Geminiで画像をタグ付け
+      // 3. Mediaへtags保存
+      // 4. GeminiでNEWS本文を生成
+      // 5. newsへNEWS保存
+      // --------------------------------------------------
 
       Alert.alert(
         "送信しました！",
-        `${elderlyUser.name || "おじいちゃん・おばあちゃん"}さんにニュースを届けました。`,
+        "写真を送信しました。\nAIが写真を分析してニュースを作成します。",
         [
           {
             text: "OK",
-            onPress: () => navigation.goBack(),
+            onPress: () =>
+              navigation.goBack(),
           },
         ]
       );
@@ -261,8 +515,17 @@ export default function CreateNewsScreen({ navigation }: any) {
       setImageUri("");
       setCaption("");
     } catch (error) {
-      console.error("NEWS送信エラー:", error);
-      Alert.alert("送信に失敗しました", "通信環境を確認してもう一度お試しください。");
+      console.error(
+        "NEWS送信エラー:",
+        error
+      );
+
+      Alert.alert(
+        "送信に失敗しました",
+        error instanceof Error
+          ? error.message
+          : "通信環境を確認してもう一度お試しください。"
+      );
     } finally {
       setSending(false);
     }
@@ -270,66 +533,128 @@ export default function CreateNewsScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>準備中...</Text>
+      <SafeAreaView
+        style={
+          styles.loadingContainer
+        }
+      >
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+        />
+
+        <Text
+          style={
+            styles.loadingText
+          }
+        >
+          準備中...
+        </Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : undefined
+        }
+        keyboardVerticalOffset={
+          Platform.OS === "ios"
+            ? 10
+            : 0
+        }
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={
+            styles.content
+          }
           keyboardShouldPersistTaps="handled"
         >
           {/* ヘッダー部（戻るボタン ＆ 送信先表示） */}
-          <View style={styles.headerRow}>
+          <View
+            style={styles.headerRow}
+          >
             <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
+              style={
+                styles.backButton
+              }
+              onPress={() =>
+                navigation.goBack()
+              }
               disabled={sending}
             >
-              <Text style={styles.backButtonText}>← 戻る</Text>
+              <Text
+                style={
+                  styles.backButtonText
+                }
+              >
+                ← 戻る
+              </Text>
             </TouchableOpacity>
 
             {elderlyUser && (
-              <Text style={styles.destinationText}>
-                宛先：{elderlyUser.name || "おじいちゃん・おばあちゃん"}
+              <Text
+                style={
+                  styles.destinationText
+                }
+              >
+                宛先：
+                {elderlyUser.name ||
+                  "おじいちゃん・おばあちゃん"}
               </Text>
             )}
           </View>
 
           {/* 写真選択ボタン & プレビュー */}
           <TouchableOpacity
-            style={styles.imagePicker}
+            style={
+              styles.imagePicker
+            }
             onPress={pickImage}
             disabled={sending}
             activeOpacity={0.8}
           >
             {imageUri ? (
               <Image
-                source={{ uri: imageUri }}
-                style={styles.previewImage}
+                source={{
+                  uri: imageUri,
+                }}
+                style={
+                  styles.previewImage
+                }
                 resizeMode="cover"
               />
             ) : (
-              <Text style={styles.imagePickerText}>ニュースに載せる写真を選ぶ</Text>
+              <Text
+                style={
+                  styles.imagePickerText
+                }
+              >
+                ニュースに載せる写真を選ぶ
+              </Text>
             )}
           </TouchableOpacity>
 
           {/* コメント入力 */}
           <TextInput
-            style={styles.textInput}
+            style={
+              styles.textInput
+            }
             placeholder="コメントを入力（💡何も書かなければAIが考えます!）"
-            placeholderTextColor={COLORS.textSecondary}
+            placeholderTextColor={
+              COLORS.textSecondary
+            }
             value={caption}
-            onChangeText={setCaption}
+            onChangeText={
+              setCaption
+            }
             multiline
             textAlignVertical="top"
             maxLength={200}
@@ -338,15 +663,28 @@ export default function CreateNewsScreen({ navigation }: any) {
 
           {/* 送信ボタン */}
           <TouchableOpacity
-            style={[styles.sendButton, sending && styles.disabledButton]}
+            style={[
+              styles.sendButton,
+              sending &&
+                styles.disabledButton,
+            ]}
             onPress={handleSend}
             disabled={sending}
             activeOpacity={0.8}
           >
             {sending ? (
-              <ActivityIndicator size="small" color={COLORS.white} />
+              <ActivityIndicator
+                size="small"
+                color={COLORS.white}
+              />
             ) : (
-              <Text style={styles.sendButtonText}>ニュースを送る</Text>
+              <Text
+                style={
+                  styles.sendButtonText
+                }
+              >
+                ニュースを送る
+              </Text>
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -358,70 +696,92 @@ export default function CreateNewsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
+
   loadingContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    justifyContent: "center",
+    backgroundColor:
+      COLORS.background,
+    justifyContent:
+      "center",
     alignItems: "center",
   },
+
   loadingText: {
     marginTop: 16,
     fontSize: 18,
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
+
   content: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 24,
   },
+
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     marginBottom: 12,
   },
+
   backButton: {
     paddingVertical: 6,
     paddingRight: 12,
   },
+
   backButtonText: {
     fontSize: 16,
     fontWeight: "bold",
     color: COLORS.primary,
   },
+
   destinationText: {
     fontSize: 15,
     fontWeight: "600",
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
+
   imagePicker: {
     width: "100%",
     height: 200,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: COLORS.disabled,
-    backgroundColor: COLORS.card,
-    justifyContent: "center",
+    borderColor:
+      COLORS.disabled,
+    backgroundColor:
+      COLORS.card,
+    justifyContent:
+      "center",
     alignItems: "center",
     overflow: "hidden",
     marginBottom: 12,
   },
+
   previewImage: {
     width: "100%",
     height: "100%",
   },
+
   imagePickerText: {
     fontSize: 16,
     fontWeight: "bold",
     color: COLORS.primary,
   },
+
   textInput: {
     minHeight: 100,
-    backgroundColor: COLORS.card,
+    backgroundColor:
+      COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.disabled,
+    borderColor:
+      COLORS.disabled,
     borderRadius: 14,
     padding: 12,
     fontSize: 16,
@@ -429,16 +789,21 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 16,
   },
+
   sendButton: {
     height: 54,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center",
+    backgroundColor:
+      COLORS.primary,
+    justifyContent:
+      "center",
     alignItems: "center",
   },
+
   disabledButton: {
     opacity: 0.6,
   },
+
   sendButtonText: {
     fontSize: 18,
     fontWeight: "bold",

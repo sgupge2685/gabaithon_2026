@@ -6,11 +6,9 @@ import {
   StatusBar,
   ActivityIndicator,
   View,
-  TouchableOpacity, // 追加: ボタン用の部品
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import { getAuth } from "@react-native-firebase/auth";
 
 import NewspaperCard from "../components/NewspaperCard";
 import type { News } from "../types/News";
@@ -20,8 +18,6 @@ import {
   updateNews,
 } from "../firebase/firestore";
 import { getAppCurrentUser } from "../features/auth/authFunctions";
-
-const auth = getAuth();
 
 const getTime = (dateInput: any) => {
   if (!dateInput) return 0;
@@ -35,137 +31,278 @@ const getTime = (dateInput: any) => {
   return new Date(dateInput).getTime();
 };
 
-// 変更: navigation を受け取るようにする
-export default function NewsScreen({ navigation }: any) {
-  const [news, setNews] = useState<News | null>(null);
-  const [loading, setLoading] = useState(true);
+// --------------------------------------------------
+// NewsScreen
+// --------------------------------------------------
 
-  useEffect(() => {
-    const fetchTodayNews = async () => {
-      try {
-        setLoading(true);
+export default function NewsScreen({
+  navigation,
+}: any) {
+  const [news, setNews] =
+    useState<News | null>(null);
 
-        const firebaseUser = getAppCurrentUser();
+  const [loading, setLoading] =
+    useState(true);
 
-        if (!firebaseUser) {
-          setNews(null);
-          return;
-        }
+  const [reactionSending, setReactionSending] =
+    useState(false);
 
-        const newsList = await getNews();
+  // --------------------------------------------------
+  // 今日のNEWSを取得
+  // --------------------------------------------------
 
-        // 自分宛てのNEWSのみ
-        const myNews = newsList.filter(
+  const fetchTodayNews = async () => {
+    try {
+      setLoading(true);
+
+      const firebaseUser =
+        getAppCurrentUser();
+
+      if (!firebaseUser) {
+        setNews(null);
+        return;
+      }
+
+      // --------------------------------------------------
+      // NEWS取得
+      // --------------------------------------------------
+
+      const newsList =
+        await getNews();
+
+      // --------------------------------------------------
+      // 自分宛てのNEWSのみ
+      // --------------------------------------------------
+
+      const myNews =
+        newsList.filter(
           (item: News) =>
-            item.deliveredTo === firebaseUser.uid
+            item.deliveredTo ===
+            firebaseUser.uid
         );
 
-        const sortedNews = myNews.sort(
+      // --------------------------------------------------
+      // 新しい順に並べる
+      // --------------------------------------------------
+
+      const sortedNews =
+        myNews.sort(
           (a, b) =>
             getTime(b.createdAt) -
             getTime(a.createdAt)
         );
 
-        const unreadNews = sortedNews.find(
-          (item) => item.isRead === false
+      // --------------------------------------------------
+      // 未読NEWSを優先して表示
+      // --------------------------------------------------
+
+      const unreadNews =
+        sortedNews.find(
+          (item) =>
+            item.isRead === false
         );
 
-        if (unreadNews) {
-          setNews(unreadNews);
-        } else if (sortedNews.length > 0) {
-          setNews(sortedNews[0]);
-        } else {
-          setNews(null);
-        }
-      } catch (error) {
-        console.error(
-          "今日のニュース取得エラー:",
-          error
+      if (unreadNews) {
+        setNews(
+          unreadNews
         );
-      } finally {
-        setLoading(false);
+      } else if (
+        sortedNews.length > 0
+      ) {
+        setNews(
+          sortedNews[0]
+        );
+      } else {
+        setNews(null);
       }
-    };
+    } catch (error) {
+      console.error(
+        "今日のニュース取得エラー:",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // --------------------------------------------------
+  // 初期表示
+  // --------------------------------------------------
+
+  useEffect(() => {
     fetchTodayNews();
   }, []);
 
-  const handleReaction = async () => {
-    if (!news || !news.id) return;
+  // --------------------------------------------------
+  // 画面に戻ってきたときに再取得
+  // --------------------------------------------------
 
-    // Optimistic UI
-    setNews((prev) =>
-      prev
-        ? {
-            ...prev,
-            isRead: true,
-            reaction: "👍",
-          }
-        : null
-    );
+  useEffect(() => {
+    const unsubscribe =
+      navigation.addListener(
+        "focus",
+        () => {
+          fetchTodayNews();
+        }
+      );
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // --------------------------------------------------
+  // みたよ！リアクション
+  // --------------------------------------------------
+
+  const handleReaction = async () => {
+    if (
+      !news ||
+      !news.id ||
+      reactionSending
+    ) {
+      return;
+    }
 
     try {
-      await updateNews(news.id, {
-        isRead: true,
-        reaction: "👍",
-      });
+      setReactionSending(true);
+
+      // --------------------------------------------------
+      // 先に画面を更新
+      // --------------------------------------------------
+
+      setNews(
+        (prev) =>
+          prev
+            ? {
+                ...prev,
+                isRead: true,
+                reaction: "👍",
+              }
+            : null
+      );
+
+      // --------------------------------------------------
+      // Firestoreへ保存
+      // --------------------------------------------------
+
+      await updateNews(
+        news.id,
+        {
+          isRead: true,
+          reaction: "👍",
+        }
+      );
+
+      console.log(
+        "NEWSを既読として保存しました:",
+        news.id
+      );
     } catch (error) {
       console.error(
         "リアクションの保存に失敗しました:",
         error
       );
+
+      // --------------------------------------------------
+      // 保存失敗時は元に戻す
+      // --------------------------------------------------
+
+      setNews(
+        (prev) =>
+          prev
+            ? {
+                ...prev,
+                isRead: news.isRead,
+                reaction: news.reaction,
+              }
+            : null
+      );
+    } finally {
+      setReactionSending(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+    >
       <StatusBar
         barStyle="dark-content"
-        backgroundColor={COLORS.background}
+        backgroundColor={
+          COLORS.background
+        }
       />
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={
+          styles.content
+        }
       >
-        {/* 追加: 戻るボタン */}
+        {/* 戻るボタン */}
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() =>
+            navigation.goBack()
+          }
+          disabled={reactionSending}
         >
-          <Text style={styles.backButtonText}>← ホームに戻る</Text>
+          <Text
+            style={
+              styles.backButtonText
+            }
+          >
+            ← ホームに戻る
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.logo}>
           MAGONEWS
         </Text>
 
-        <Text style={styles.heading}>
+        <Text
+          style={styles.heading}
+        >
           今日のニュース
         </Text>
 
         {loading ? (
-          <View style={styles.centerBox}>
+          <View
+            style={styles.centerBox}
+          >
             <ActivityIndicator
               size="large"
               color={COLORS.primary}
             />
 
-            <Text style={styles.loadingText}>
+            <Text
+              style={
+                styles.loadingText
+              }
+            >
               ニュースを読み込み中...
             </Text>
           </View>
         ) : news ? (
           <View>
-            <Text style={styles.newsTitle}>{news.title}</Text>
-            
+            <Text
+              style={
+                styles.newsTitle
+              }
+            >
+              {news.title}
+            </Text>
+
             <NewspaperCard
               news={news}
-              onReaction={handleReaction}
+              onReaction={
+                handleReaction
+              }
             />
           </View>
         ) : (
-          <Text style={styles.emptyText}>
+          <Text
+            style={styles.emptyText}
+          >
             まだニュースが届いていません。
           </Text>
         )}
@@ -177,12 +314,14 @@ export default function NewsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
 
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
 
   content: {
@@ -191,13 +330,15 @@ const styles = StyleSheet.create({
     minHeight: "100%",
   },
 
-  // 追加: 戻るボタンのスタイル
+  // 戻るボタン
   backButton: {
-    alignSelf: "flex-start",
+    alignSelf:
+      "flex-start",
     paddingVertical: 8,
     paddingRight: 16,
     marginBottom: 8,
   },
+
   backButtonText: {
     fontSize: 16,
     fontWeight: "bold",
