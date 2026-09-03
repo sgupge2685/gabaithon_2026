@@ -10,8 +10,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 
+import { getAuth } from "firebase/auth";
+
 import { COLORS } from "../constants/colors";
 import { getNews } from "../firebase/firestore";
+import app from "../firebase/firebaseConfig";
+
+const auth = getAuth(app);
 
 export default function HomeScreen({ navigation }: any) {
   const [hasNewNews, setHasNewNews] = useState(false);
@@ -29,20 +34,38 @@ export default function HomeScreen({ navigation }: any) {
     const unsubscribe = navigation.addListener("focus", () => {
       checkNewNews();
     });
+
     checkNewNews();
+
     return unsubscribe;
   }, [navigation]);
 
   const checkNewNews = async () => {
     try {
       setLoading(true);
+
+      const firebaseUser = auth.currentUser;
+
+      // ログイン中のユーザーがいない場合
+      if (!firebaseUser) {
+        setHasNewNews(false);
+        return;
+      }
+
       const newsList = await getNews();
 
-      // 未読(isReadがfalse)のニュースが1つでもあるかチェック
-      const unreadExists = newsList.some((news: News) => news.isRead === false);
+      // 自分宛のNEWSの中に未読(isReadがfalse)のニュースが
+      // 1つでもあるかチェック
+      const unreadExists = newsList.some(
+        (news: News) =>
+          news.deliveredTo === firebaseUser.uid &&
+          news.isRead === false
+      );
+
       setHasNewNews(unreadExists);
     } catch (error) {
       console.error("ニュースの確認に失敗しました:", error);
+      setHasNewNews(false);
     } finally {
       setLoading(false);
     }
@@ -67,7 +90,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text style={styles.message}>
               {hasNewNews
                 ? "今日の家族ニュースが届いています✨"
-                : "今は新しいニュースはありません。\n過去の新聞を振り返ってみましょう！"}
+                : "今は新しいニュースはありません。\n過去のニュースを振り返ってみましょう！"}
             </Text>
           )}
         </View>
@@ -100,8 +123,11 @@ export default function HomeScreen({ navigation }: any) {
                 <Text style={styles.mainActionText}>今日のニュース</Text>
                 {hasNewNews && <View style={styles.unreadBadge} />}
               </View>
+
               <Text style={styles.subActionText}>
-                {hasNewNews ? "✨ 新しい新聞が届いています" : "最新の新聞を読む"}
+                {hasNewNews
+                  ? "✨ 新しいニュースが届いています"
+                  : "最新のニュースを読む"}
               </Text>
             </View>
           </View>
@@ -130,8 +156,10 @@ export default function HomeScreen({ navigation }: any) {
             </View>
 
             <View style={styles.cardContent}>
-              <Text style={styles.historyActionText}>過去のNEWS</Text>
-              <Text style={styles.subActionText}>これまでの思い出を振り返る</Text>
+              <Text style={styles.historyActionText}>過去のニュース</Text>
+              <Text style={styles.subActionText}>
+                これまでの思い出を振り返る
+              </Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -211,6 +239,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
+
   calendarHeaderHistory: {
     height: 32,
     backgroundColor: COLORS.disabled,
@@ -218,12 +247,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
+
   calendarHeaderTextToday: {
     color: COLORS.white,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1.5,
   },
+
   calendarHeaderTextHistory: {
     color: COLORS.textSecondary,
     fontSize: 12,
@@ -241,6 +272,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: COLORS.background,
   },
+
   calendarRingRight: {
     position: "absolute",
     right: 40,
@@ -271,18 +303,21 @@ const styles = StyleSheet.create({
     borderColor: COLORS.disabled,
     marginRight: 16,
   },
+
   monthText: {
     fontSize: 12,
     fontWeight: "700",
     color: COLORS.textSecondary,
     lineHeight: 14,
   },
+
   dateNumberText: {
     fontSize: 26,
     fontWeight: "800",
     color: COLORS.primary,
     lineHeight: 30,
   },
+
   dayText: {
     fontSize: 11,
     fontWeight: "700",
@@ -302,10 +337,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.disabled,
     marginRight: 16,
   },
+
   historyCalendarIcon: {
     fontSize: 26,
     marginBottom: 2,
   },
+
   historySubBadge: {
     fontSize: 11,
     fontWeight: "700",
@@ -317,17 +354,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
   },
+
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 4,
   },
+
   mainActionText: {
     fontSize: 21,
     fontWeight: "800",
     color: COLORS.text,
     letterSpacing: 0.5,
   },
+
   historyActionText: {
     fontSize: 21,
     fontWeight: "800",
@@ -335,6 +375,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 4,
   },
+
   subActionText: {
     fontSize: 13,
     color: COLORS.textSecondary,
