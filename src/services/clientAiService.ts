@@ -14,6 +14,15 @@ const GEMINI_API_KEY =
   "";
 
 /**
+ * 使用するGeminiモデル候補（3.6-flash, 3.7-flash, 3.8-flash を順に試行）
+ */
+export const GEMINI_FLASH_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-3.7-flash",
+  "gemini-3.8-flash",
+] as const;
+
+/**
  * 基本タグ一覧（表記ゆれ防止）
  */
 export const BASE_TAGS = [
@@ -82,38 +91,45 @@ ${BASE_TAGS.join(", ")}
 - 3〜8個程度のタグを日本語のJSON配列形式（例: ["公園", "子供", "笑顔", "夏"]）だけで出力してください。
 `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    let text: string | undefined;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
+    for (const model of GEMINI_FLASH_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
               {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: base64Data,
-                },
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: "image/jpeg",
+                      data: base64Data,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          response_mime_type: "application/json",
-        },
-      }),
-    });
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          }),
+        });
 
-    if (!res.ok) {
-      console.warn(`Gemini タグ付け API エラー (${res.status}):`, await res.text());
-      return ["家族", "日常", "おでかけ"];
+        if (res.ok) {
+          const data = await res.json();
+          text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) break;
+        } else {
+          console.warn(`Gemini タグ付けモデル ${model} 応答エラー (${res.status})`);
+        }
+      } catch (callError) {
+        console.warn(`Gemini タグ付けモデル ${model} 呼び出し失敗:`, callError);
+      }
     }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (text) {
       const parsed = JSON.parse(text);
@@ -169,29 +185,33 @@ JSON形式で {"title": "タイトル", "message": "紹介文"} のみを出力�
 `;
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    let text: string | undefined;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          response_mime_type: "application/json",
-        },
-      }),
-    });
+    for (const model of GEMINI_FLASH_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          }),
+        });
 
-    if (!res.ok) {
-      console.warn(`Gemini ニュース生成 API エラー (${res.status}):`, await res.text());
-      return {
-        title: hasCaption ? "家族からのおたより" : "今日の家族ニュース",
-        message: hasCaption ? trimmedCaption : "家族から元気な写真が届きました！今日も良い一日になりますように。",
-      };
+        if (res.ok) {
+          const data = await res.json();
+          text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) break;
+        } else {
+          console.warn(`Gemini ニュース生成モデル ${model} 応答エラー (${res.status})`);
+        }
+      } catch (callError) {
+        console.warn(`Gemini ニュース生成モデル ${model} 呼び出し失敗:`, callError);
+      }
     }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (text) {
       const parsed = JSON.parse(text);
@@ -242,28 +262,33 @@ export async function generatePreventionNewsClient(
 JSON形式で {"title": "タイトル", "message": "本文"} のみを出力してください。
 `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    let text: string | undefined;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          response_mime_type: "application/json",
-        },
-      }),
-    });
+    for (const model of GEMINI_FLASH_MODELS) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              response_mime_type: "application/json",
+            },
+          }),
+        });
 
-    if (!res.ok) {
-      return {
-        title: "こまめに水分補給を！",
-        message: "喉が渇く前に少しずつお茶やお水を飲みましょう。室内でも快適な室温にしてお過ごしくださいね。",
-      };
+        if (res.ok) {
+          const data = await res.json();
+          text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) break;
+        } else {
+          console.warn(`Gemini 予防ニュースモデル ${model} 応答エラー (${res.status})`);
+        }
+      } catch (callError) {
+        console.warn(`Gemini 予防ニュースモデル ${model} 呼び出し失敗:`, callError);
+      }
     }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) {
       const parsed = JSON.parse(text);
       if (parsed.title && parsed.message) {
@@ -484,8 +509,8 @@ JSON形式で以下のキーのみを出力してください:
       };
     }
 
-    // gemini-2.5-flash または gemini-1.5-flash を呼び出し
-    const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-flash-latest"];
+    // 3.6-flash, 3.7-flash, 3.8-flash を順に呼び出し
+    const models = GEMINI_FLASH_MODELS;
     let text: string | undefined;
 
     for (const model of models) {
