@@ -51,6 +51,7 @@ npx expo start --go --offline --ios
 ```text
 gabaithon_2026/
 │
+├─ index.ts                    ← Expo / React Native エントリーポイント
 ├─ App.tsx                     ← アプリのエントリーポイント（ナビゲーション呼び出し）
 ├─ app.json                    ← Expo設定ファイル（アプリ名、アイコン、パーミッション設定等）
 ├─ eas.json                    ← Expo Application Services (EAS) ビルド設定
@@ -70,10 +71,12 @@ gabaithon_2026/
 │  ├─ testPreventionNews.ts   ← AI③④ 予防NEWS生成・写真選定（一本化）のテスト
 │  └─ testImageGenerate.ts    ← AI⑤ イラスト生成AIのテスト（参考用）
 │
-├─ functions/                  ← Firebase Cloud Functions（バックエンド自動処理）
+├─ functions/                  ← Firebase Cloud Functions（サーバー側・参考/予備用）
+│                              ※当初サーバー側でのAI自動処理を想定していましたが、ハッカソン期間中に
+│                                Firebase側での実装が間に合わなかったため、現在はクライアント側（ローカル）で実行しています。
 │  ├─ src/
-│  │  ├─ index.ts              ← Cloud Functions のエントリーポイント（定時配信バッチ等）
-│  │  └─ services/            ← サーバー側共通サービス
+│  │  ├─ index.ts              ← Cloud Functions のエントリーポイント（参考実装）
+│  │  └─ services/            ← サーバー側共通サービス（参考実装）
 │  │     ├─ taggingService.ts
 │  │     └─ newsGenerateService.ts
 │  └─ package.json
@@ -115,13 +118,13 @@ gabaithon_2026/
    │  └─ firestore.ts          ← Firestore CRUD操作（users, media, news コレクションの保存・取得・更新）
    │
    ├─ services/                ← AI連携・気象データ・通知サービス
-   │  ├─ clientAiService.ts    ← 【最重要】React Nativeクライアント用 Gemini AI 連携（自動タグ付け・見出し生成・気象連動予防ニュース・重複防止ガード）
+   │  ├─ clientAiService.ts    ← 【最重要・本番稼働中】アプリ端末（ローカル）で直接Gemini APIを実行するクライアントAI連携サービス（タグ付け・見出し生成・気象連動予防ニュース・重複防止ガード）
    │  ├─ weatherService.ts     ← 日本全国の気象データ取得（気象庁公式データ＋Open-Meteoの湿度/UV/風速）
    │  ├─ notificationService.ts← ローカルプッシュ通知制御（権限リクエスト・通知発火）
    │  ├─ photoSelectService.ts ← 写真選定ロジック（最新順・未配信優先・重複回避ソート）
-   │  ├─ preventionNewsService.ts ← Node.js/サーバー用 予防NEWS生成・気象判定・写真選定
-   │  ├─ newsGenerateService.ts   ← Node.js/サーバー用 NEWS生成AI（見出し＋紹介文）
-   │  ├─ taggingService.ts        ← Node.js/サーバー用 写真自動タグ付けAI
+   │  ├─ preventionNewsService.ts ← Node.js/テスト用 予防NEWS生成・気象判定・写真選定
+   │  ├─ newsGenerateService.ts   ← Node.js/テスト用 NEWS生成AI（見出し＋紹介文）
+   │  ├─ taggingService.ts        ← Node.js/テスト用 写真自動タグ付けAI
    │  └─ imageGenerateService.ts  ← イラスト生成AI（Nano Banana 2 / 参考用）
    │
    ├─ types/                   ← アプリ全体で共有する TypeScript 型定義
@@ -133,6 +136,16 @@ gabaithon_2026/
    └─ constants/               ← 定数定義
       └─ colors.ts             ← アプリ全体のカラーパレット（Primary, Background, Text等）
 ```
+
+### 2. 【重要】AI処理の実行環境について（クライアント／ローカル直接実行）
+
+本アプリにおける Gemini AI による各種処理（写真自動タグ付け・NEWS見出し生成・気象連動予防NEWS作成）は、**Firebase（サーバー側）ではなく、React Native アプリ（端末ローカル / クライアント側）の `src/services/clientAiService.ts` から直接実行** しています。
+
+#### ■ 経緯
+- **当初の想定:**
+  当初は `functions/`（Firebase Cloud Functions）を用い、写真アップロード時や定時配信バッチなどのAI処理をサーバー側で自動実行するアーキテクチャを想定していました。
+- **現在の実装理由:**
+  ハッカソン期間中に Firebase（Cloud Functions）側でのAI処理の実装・開発が間に合わなかったため、確実に動作させるために **React Native クライアント側（ローカル）で直接 Gemini API を呼び出す構成** に移行して実装しています。
 
 ---
 
